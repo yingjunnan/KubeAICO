@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://kubeaico:kubeaico@postgres:5432/kubeaico
+      CORS_ORIGINS: http://localhost:5173
+      USE_MOCK_DATA: 'true'
+      SECRET_KEY: change-me
+      DEFAULT_ADMIN_USERNAME: admin
+      DEFAULT_ADMIN_PASSWORD: admin123
+    ports:
+      - '8000:8000'
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_OVERVIEW_WS_URL: ws://localhost:8000/ws/overview
+    ports:
+      - '5173:5173'
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kubeaico
+      POSTGRES_PASSWORD: kubeaico
+      POSTGRES_DB: kubeaico
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+volumes:
+  pg-data:

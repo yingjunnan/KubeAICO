@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# Environment
+.env
+.venv
+.env.*
+
+# Local DB
+*.db
+
+# OS
+.DS_Store
+backend/.venv/pyvenv.cfg

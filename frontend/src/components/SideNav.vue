@@ -4,13 +4,14 @@
       <div class="brand-mark">K</div>
       <span>KubeAICO</span>
     </div>
+
     <nav>
-      <RouterLink v-for="item in items" :key="item.name" :to="item.to" class="nav-item">
+      <RouterLink to="/" class="nav-item" :class="{ 'is-active': route.path === '/' }">
         <span class="nav-icon-wrap" aria-hidden="true">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
             <path
-              v-for="(path, idx) in iconPaths[item.icon]"
-              :key="`${item.name}-${idx}`"
+              v-for="(path, idx) in iconPaths.overview"
+              :key="`overview-${idx}`"
               :d="path"
               stroke="currentColor"
               stroke-width="1.8"
@@ -19,26 +20,175 @@
             />
           </svg>
         </span>
-        <span>{{ item.label }}</span>
+        <span>Overview</span>
+      </RouterLink>
+
+      <section class="nav-group">
+        <RouterLink
+          :to="{ path: '/workloads', query: { kind: 'deployment' } }"
+          class="nav-item nav-group-header"
+          :class="{ 'is-active': isWorkloadsGroupActive }"
+        >
+          <span class="nav-icon-wrap" aria-hidden="true">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+              <path
+                v-for="(path, idx) in iconPaths.workloads"
+                :key="`workloads-${idx}`"
+                :d="path"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          <span>Workloads</span>
+        </RouterLink>
+
+        <div class="nav-submenu">
+          <RouterLink
+            v-for="item in workloadChildren"
+            :key="item.kind"
+            :to="{ path: '/workloads', query: { kind: item.kind } }"
+            class="nav-subitem"
+            :class="{ 'is-active': isKindActive(item.kind) }"
+          >
+            <span class="nav-sub-icon-wrap" aria-hidden="true">
+              <svg class="nav-sub-icon" viewBox="0 0 24 24" fill="none">
+                <path
+                  v-for="(path, idx) in iconPaths[item.icon]"
+                  :key="`${item.kind}-${idx}`"
+                  :d="path"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <span>{{ item.label }}</span>
+          </RouterLink>
+        </div>
+      </section>
+
+      <section class="nav-group">
+        <RouterLink
+          :to="{ path: '/workloads', query: { kind: 'service' } }"
+          class="nav-item nav-group-header"
+          :class="{ 'is-active': isServicesGroupActive }"
+        >
+          <span class="nav-icon-wrap" aria-hidden="true">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+              <path
+                v-for="(path, idx) in iconPaths.services"
+                :key="`services-${idx}`"
+                :d="path"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          <span>Services</span>
+        </RouterLink>
+
+        <div class="nav-submenu">
+          <RouterLink
+            v-for="item in serviceChildren"
+            :key="item.kind"
+            :to="{ path: '/workloads', query: { kind: item.kind } }"
+            class="nav-subitem"
+            :class="{ 'is-active': isKindActive(item.kind) }"
+          >
+            <span class="nav-sub-icon-wrap" aria-hidden="true">
+              <svg class="nav-sub-icon" viewBox="0 0 24 24" fill="none">
+                <path
+                  v-for="(path, idx) in iconPaths[item.icon]"
+                  :key="`${item.kind}-${idx}`"
+                  :d="path"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <span>{{ item.label }}</span>
+          </RouterLink>
+        </div>
+      </section>
+
+      <RouterLink to="/alerts" class="nav-item" :class="{ 'is-active': route.path === '/alerts' }">
+        <span class="nav-icon-wrap" aria-hidden="true">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+            <path
+              v-for="(path, idx) in iconPaths.alerts"
+              :key="`alerts-${idx}`"
+              :d="path"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <span>Alerts</span>
+      </RouterLink>
+
+      <RouterLink to="/audit" class="nav-item" :class="{ 'is-active': route.path === '/audit' }">
+        <span class="nav-icon-wrap" aria-hidden="true">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+            <path
+              v-for="(path, idx) in iconPaths.audit"
+              :key="`audit-${idx}`"
+              :d="path"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <span>Audit</span>
+      </RouterLink>
+
+      <RouterLink to="/ai" class="nav-item" :class="{ 'is-active': route.path === '/ai' }">
+        <span class="nav-icon-wrap" aria-hidden="true">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+            <path
+              v-for="(path, idx) in iconPaths.ai"
+              :key="`ai-${idx}`"
+              :d="path"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <span>AI</span>
       </RouterLink>
     </nav>
   </aside>
 </template>
 
 <script setup lang="ts">
-import type { RouteLocationRaw } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
 
 const iconPaths = {
   overview: ['M4 4h7v7H4z', 'M13 4h7v4h-7z', 'M13 10h7v10h-7z', 'M4 13h7v7H4z'],
   workloads: ['M4 7l8-4 8 4-8 4-8-4z', 'M4 12l8 4 8-4', 'M4 17l8 4 8-4'],
-  pods: [
-    'M5 12a3 3 0 1 0 0.01 0',
-    'M19 7a3 3 0 1 0 0.01 0',
-    'M19 17a3 3 0 1 0 0.01 0',
-    'M8 11l8-3',
-    'M8 13l8 3',
-  ],
+  deployment: ['M4 7l8-4 8 4-8 4-8-4z', 'M4 12l8 4 8-4', 'M4 17l8 4 8-4'],
+  statefulset: ['M6 4h12v16H6z', 'M9 8h6', 'M9 12h6', 'M9 16h6'],
+  daemonset: ['M12 3v4', 'M12 17v4', 'M3 12h4', 'M17 12h4', 'M6.5 6.5l2.8 2.8', 'M14.7 14.7l2.8 2.8', 'M17.5 6.5l-2.8 2.8', 'M9.3 14.7l-2.8 2.8', 'M12 15a3 3 0 1 0 0.01 0'],
+  pod: ['M12 3l6 4v10l-6 4-6-4V7l6-4z', 'M12 7v10', 'M6 9l6 4 6-4'],
   services: ['M12 3v6', 'M8 9h8', 'M6 9v6', 'M18 9v6', 'M6 15h12', 'M12 15v6'],
+  service: ['M12 3v6', 'M8 9h8', 'M6 9v6', 'M18 9v6', 'M6 15h12', 'M12 15v6'],
+  ingress: ['M4 8h16', 'M7 8V5h10v3', 'M12 8v11', 'M9 16l3 3 3-3'],
   alerts: ['M18 8a6 6 0 1 0-12 0c0 7-3 6-3 8h18c0-2-3-1-3-8', 'M10 20a2 2 0 0 0 4 0'],
   audit: ['M9 4h6', 'M8 7h8', 'M7 4H6a1 1 0 0 0-1 1v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5a1 1 0 0 0-1-1h-1', 'M9 14l2 2 4-4'],
   ai: [
@@ -48,21 +198,40 @@ const iconPaths = {
   ],
 } as const
 
-type IconKey = keyof typeof iconPaths
-type NavItem = {
-  name: string
+type SubNavItem = {
+  kind: string
   label: string
-  to: RouteLocationRaw
-  icon: IconKey
+  icon: keyof typeof iconPaths
 }
 
-const items: NavItem[] = [
-  { name: 'overview', label: 'Overview', to: '/', icon: 'overview' },
-  { name: 'workloads', label: 'Workloads', to: '/workloads', icon: 'workloads' },
-  { name: 'pods', label: 'Pods', to: { path: '/workloads', query: { kind: 'pod' } }, icon: 'pods' },
-  { name: 'services', label: 'Services', to: { path: '/workloads', query: { kind: 'service' } }, icon: 'services' },
-  { name: 'alerts', label: 'Alerts', to: '/alerts', icon: 'alerts' },
-  { name: 'audit', label: 'Audit', to: '/audit', icon: 'audit' },
-  { name: 'ai', label: 'AI', to: '/ai', icon: 'ai' },
+const workloadChildren: SubNavItem[] = [
+  { kind: 'deployment', label: 'Deployment', icon: 'deployment' },
+  { kind: 'statefulset', label: 'StatefulSet', icon: 'statefulset' },
+  { kind: 'daemonset', label: 'DaemonSet', icon: 'daemonset' },
+  { kind: 'pod', label: 'Pods', icon: 'pod' },
 ]
+
+const serviceChildren: SubNavItem[] = [
+  { kind: 'service', label: 'Service', icon: 'service' },
+  { kind: 'ingress', label: 'Ingress', icon: 'ingress' },
+]
+
+const workloadKinds = new Set(workloadChildren.map((item) => item.kind))
+const serviceKinds = new Set(serviceChildren.map((item) => item.kind))
+
+const currentKind = computed(() => String(route.query.kind ?? '').toLowerCase())
+
+const isWorkloadsGroupActive = computed(
+  () =>
+    route.path === '/workloads' &&
+    (currentKind.value.length === 0 || workloadKinds.has(currentKind.value)),
+)
+
+const isServicesGroupActive = computed(
+  () => route.path === '/workloads' && serviceKinds.has(currentKind.value),
+)
+
+function isKindActive(kind: string): boolean {
+  return route.path === '/workloads' && currentKind.value === kind
+}
 </script>

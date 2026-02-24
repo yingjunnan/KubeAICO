@@ -1,16 +1,9 @@
 <template>
   <AppShell title="Resource Management" @filters-change="onFilters">
     <section class="card toolbar">
-      <div class="kind-switch">
-        <button
-          v-for="item in kinds"
-          :key="item"
-          type="button"
-          :class="{ active: kind === item }"
-          @click="changeKind(item)"
-        >
-          {{ item }}
-        </button>
+      <div class="toolbar-title">
+        <p class="eyebrow">Resource Type</p>
+        <h3>{{ kind }}</h3>
       </div>
       <div class="query-fields">
         <input v-model="namespace" placeholder="namespace" @keyup.enter="loadResources" />
@@ -157,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import { getResourceDetail, getResources, rolloutRestart, scaleResource } from '../services/api'
@@ -166,10 +159,10 @@ import type { ResourceDetailResponse, ResourceKind, WorkloadItem } from '../type
 const route = useRoute()
 const router = useRouter()
 
-const kinds: ResourceKind[] = ['deployment', 'statefulset', 'daemonset', 'pod', 'service', 'ingress']
+const validKinds: ResourceKind[] = ['deployment', 'statefulset', 'daemonset', 'pod', 'service', 'ingress']
 const scalableKinds = new Set<ResourceKind>(['deployment', 'statefulset', 'daemonset'])
 
-const kind = ref<ResourceKind>((route.query.kind as ResourceKind) || 'deployment')
+const kind = ref<ResourceKind>('deployment')
 const namespace = ref('')
 const statusFilter = ref('')
 const labelSelector = ref('')
@@ -201,10 +194,14 @@ async function loadResources() {
   resources.value = response.items
 }
 
-async function changeKind(nextKind: ResourceKind) {
-  kind.value = nextKind
-  await router.replace({ path: '/workloads', query: { kind: nextKind } })
-  await loadResources()
+async function syncKindFromRoute(nextKindRaw: unknown) {
+  const nextKind = String(nextKindRaw || '').toLowerCase()
+  if (!validKinds.includes(nextKind as ResourceKind)) {
+    kind.value = 'deployment'
+    await router.replace({ path: '/workloads', query: { kind: 'deployment' } })
+    return
+  }
+  kind.value = nextKind as ResourceKind
 }
 
 function openScale(name: string, targetNamespace: string, currentReplica: number) {
@@ -284,5 +281,16 @@ async function onFilters(payload: { range: number; namespace?: string; env: stri
   await loadResources()
 }
 
-onMounted(loadResources)
+onMounted(async () => {
+  await syncKindFromRoute(route.query.kind)
+  await loadResources()
+})
+
+watch(
+  () => route.query.kind,
+  async (nextKind) => {
+    await syncKindFromRoute(nextKind)
+    await loadResources()
+  },
+)
 </script>

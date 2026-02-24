@@ -34,6 +34,9 @@ def test_resource_detail_and_audit_logs_flow() -> None:
         assert detail_payload["item"]["name"] == "web"
         assert isinstance(detail_payload["events"], list)
         assert isinstance(detail_payload["logs"], list)
+        assert "metrics" in detail_payload
+        assert detail_payload["metrics"]["range_minutes"] == 10
+        assert len(detail_payload["metrics"]["series"]) >= 1
 
         scale_resp = client.post(
             "/api/v1/resources/deployment/web/scale",

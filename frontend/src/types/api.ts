@@ -85,10 +85,29 @@ export interface ResourceEvent {
   timestamp: string
 }
 
+export interface ResourceMetricPoint {
+  ts: number
+  value: number
+}
+
+export interface ResourceMetricSeries {
+  key: string
+  label: string
+  unit: string
+  points: ResourceMetricPoint[]
+}
+
+export interface ResourceMetricsPanel {
+  range_minutes: number
+  step_seconds: number
+  series: ResourceMetricSeries[]
+}
+
 export interface ResourceDetailResponse {
   item: WorkloadItem
   events: ResourceEvent[]
   logs: string[]
+  metrics?: ResourceMetricsPanel
 }
 
 export interface AlertItem {

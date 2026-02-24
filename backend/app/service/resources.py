@@ -1,14 +1,31 @@
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.collector.kubernetes import KubernetesCollector
+from app.collector.prometheus import PrometheusCollector
 from app.db.models import User
 from app.repository.audit import AuditRepository
-from app.schemas.resource import ResourceDetailResponse, ResourceEvent, WorkloadItem, WorkloadListResponse
+from app.schemas.resource import (
+    ResourceDetailResponse,
+    ResourceEvent,
+    ResourceMetricPoint,
+    ResourceMetricSeries,
+    ResourceMetricsPanel,
+    WorkloadItem,
+    WorkloadListResponse,
+)
 
 
 class ResourceService:
-    def __init__(self, k8s_collector: KubernetesCollector, audit_repo: AuditRepository) -> None:
+    def __init__(
+        self,
+        k8s_collector: KubernetesCollector,
+        prometheus_collector: PrometheusCollector,
+        audit_repo: AuditRepository,
+    ) -> None:
         self.k8s_collector = k8s_collector
+        self.prometheus_collector = prometheus_collector
         self.audit_repo = audit_repo
 
     async def list_resources(
@@ -37,6 +54,8 @@ class ResourceService:
         name: str,
         namespace: str,
         log_lines: int = 120,
+        range_minutes: int = 10,
+        step_seconds: int = 30,
     ) -> ResourceDetailResponse:
         resource = await self.k8s_collector.get_resource(kind=kind, name=name, namespace=namespace)
         workload = self._to_workload_item(kind, resource)
@@ -63,7 +82,16 @@ class ResourceService:
             tail_lines=log_lines,
         )
 
-        return ResourceDetailResponse(item=workload, events=events, logs=logs)
+        metrics = await self._build_detail_metrics(
+            kind=kind,
+            name=name,
+            namespace=namespace,
+            workload=workload,
+            range_minutes=range_minutes,
+            step_seconds=step_seconds,
+        )
+
+        return ResourceDetailResponse(item=workload, events=events, logs=logs, metrics=metrics)
 
     async def scale_workload(
         self,
@@ -164,3 +192,152 @@ class ResourceService:
             or event.get("firstTimestamp")
             or ""
         )
+
+    async def _build_detail_metrics(
+        self,
+        *,
+        kind: str,
+        name: str,
+        namespace: str,
+        workload: WorkloadItem,
+        range_minutes: int,
+        step_seconds: int,
+    ) -> ResourceMetricsPanel:
+        profile = self._metric_profile(kind=kind)
+        workload_filter = (
+            self._workload_hint_from_name(name)
+            if kind in {"service", "ingress"}
+            else name
+        )
+        series: list[ResourceMetricSeries] = []
+
+        for metric_key, metric_label, unit in profile:
+            points = await self._query_metric_series(
+                metric_key=metric_key,
+                namespace=namespace,
+                workload=workload_filter,
+                range_minutes=range_minutes,
+                step_seconds=step_seconds,
+            )
+            series.append(
+                ResourceMetricSeries(
+                    key=metric_key,
+                    label=metric_label,
+                    unit=unit,
+                    points=points,
+                )
+            )
+
+        if kind in {"deployment", "statefulset", "daemonset"}:
+            desired = float(workload.replicas or 0)
+            available = float(workload.available_replicas or 0)
+            series.append(
+                ResourceMetricSeries(
+                    key="desired_replicas",
+                    label="Desired Replicas",
+                    unit="replicas",
+                    points=self._build_constant_series(
+                        value=desired,
+                        range_minutes=range_minutes,
+                        step_seconds=step_seconds,
+                    ),
+                )
+            )
+            series.append(
+                ResourceMetricSeries(
+                    key="available_replicas",
+                    label="Available Replicas",
+                    unit="replicas",
+                    points=self._build_constant_series(
+                        value=available,
+                        range_minutes=range_minutes,
+                        step_seconds=step_seconds,
+                    ),
+                )
+            )
+
+        return ResourceMetricsPanel(
+            range_minutes=range_minutes,
+            step_seconds=step_seconds,
+            series=series,
+        )
+
+    def _metric_profile(self, kind: str) -> list[tuple[str, str, str]]:
+        if kind == "pod":
+            return [
+                ("cpu_usage", "CPU Usage", "cores"),
+                ("memory_usage", "Memory Usage", "bytes"),
+                ("network_rx", "Network RX", "bytes_per_second"),
+                ("network_tx", "Network TX", "bytes_per_second"),
+            ]
+        if kind in {"deployment", "statefulset", "daemonset"}:
+            return [
+                ("cpu_usage", "CPU Usage", "cores"),
+                ("memory_usage", "Memory Usage", "bytes"),
+                ("error_rate", "Throttle/Error Rate", "ratio"),
+            ]
+        if kind in {"service", "ingress"}:
+            return [
+                ("network_rx", "Ingress Traffic", "bytes_per_second"),
+                ("network_tx", "Egress Traffic", "bytes_per_second"),
+                ("error_rate", "Throttle/Error Rate", "ratio"),
+            ]
+        return [
+            ("cpu_usage", "CPU Usage", "cores"),
+            ("memory_usage", "Memory Usage", "bytes"),
+        ]
+
+    async def _query_metric_series(
+        self,
+        *,
+        metric_key: str,
+        namespace: str,
+        workload: str | None,
+        range_minutes: int,
+        step_seconds: int,
+    ) -> list[ResourceMetricPoint]:
+        raw_series = await self.prometheus_collector.get_timeseries(
+            metric=metric_key,
+            range_minutes=range_minutes,
+            namespace=namespace,
+            workload=workload,
+            step_seconds=step_seconds,
+        )
+
+        merged: dict[int, float] = {}
+        for row in raw_series:
+            for pair in row.get("values", []):
+                ts = int(pair[0])
+                value = float(pair[1])
+                merged[ts] = merged.get(ts, 0.0) + value
+
+        return [
+            ResourceMetricPoint(ts=ts, value=value)
+            for ts, value in sorted(merged.items(), key=lambda item: item[0])
+        ]
+
+    @staticmethod
+    def _build_constant_series(
+        *,
+        value: float,
+        range_minutes: int,
+        step_seconds: int,
+    ) -> list[ResourceMetricPoint]:
+        now = datetime.now(UTC)
+        total_points = max(10, int(range_minutes * 60 / step_seconds))
+        return [
+            ResourceMetricPoint(
+                ts=int(
+                    (now - timedelta(seconds=(total_points - index) * step_seconds)).timestamp()
+                ),
+                value=value,
+            )
+            for index in range(total_points)
+        ]
+
+    @staticmethod
+    def _workload_hint_from_name(resource_name: str) -> str:
+        for suffix in ("-svc", "-service", "-ingress"):
+            if resource_name.endswith(suffix):
+                return resource_name[: -len(suffix)] or resource_name
+        return resource_name

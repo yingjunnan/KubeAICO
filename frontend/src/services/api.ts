@@ -68,6 +68,8 @@ export async function getResourceDetail(params: {
   name: string
   namespace: string
   log_lines?: number
+  range_minutes?: number
+  step_seconds?: number
 }): Promise<ResourceDetailResponse> {
   const { kind, name, ...query } = params
   const { data } = await api.get<ResourceDetailResponse>(`/resources/${kind}/${name}/detail`, { params: query })

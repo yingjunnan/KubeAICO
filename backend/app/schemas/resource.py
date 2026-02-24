@@ -52,7 +52,26 @@ class ResourceEvent(BaseModel):
     timestamp: str
 
 
+class ResourceMetricPoint(BaseModel):
+    ts: int
+    value: float
+
+
+class ResourceMetricSeries(BaseModel):
+    key: str
+    label: str
+    unit: str
+    points: list[ResourceMetricPoint] = Field(default_factory=list)
+
+
+class ResourceMetricsPanel(BaseModel):
+    range_minutes: int
+    step_seconds: int
+    series: list[ResourceMetricSeries] = Field(default_factory=list)
+
+
 class ResourceDetailResponse(BaseModel):
     item: WorkloadItem
     events: list[ResourceEvent] = Field(default_factory=list)
     logs: list[str] = Field(default_factory=list)
+    metrics: ResourceMetricsPanel | None = None

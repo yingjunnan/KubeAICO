@@ -73,6 +73,18 @@
         Restarts: {{ detail.item.restarts }}
       </p>
 
+      <section v-if="detail.metrics?.series?.length" class="detail-metrics-grid">
+        <TrendChart
+          v-for="(series, idx) in detail.metrics.series"
+          :key="series.key"
+          :title="series.label"
+          :subtitle="`Latest ${latestDisplay(series)} • Unit ${unitLabel(series)}`"
+          :x-axis="axisFromPoints(series.points)"
+          :values="displayValues(series)"
+          :color="chartColor(idx)"
+        />
+      </section>
+
       <div class="detail-grid">
         <article>
           <h4>Recent Events</h4>
@@ -153,8 +165,9 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
+import TrendChart from '../components/TrendChart.vue'
 import { getResourceDetail, getResources, rolloutRestart, scaleResource } from '../services/api'
-import type { ResourceDetailResponse, ResourceKind, WorkloadItem } from '../types/api'
+import type { ResourceDetailResponse, ResourceKind, ResourceMetricSeries, WorkloadItem } from '../types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -273,7 +286,55 @@ async function openDetail(name: string, targetNamespace: string) {
     name,
     namespace: targetNamespace,
     log_lines: 120,
+    range_minutes: 10,
+    step_seconds: 30,
   })
+}
+
+function axisFromPoints(points: { ts: number; value: number }[]): string[] {
+  return points.map((point) => {
+    const date = new Date(point.ts * 1000)
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  })
+}
+
+function valueScale(unit: string): number {
+  if (unit === 'bytes') return 1024 ** 3
+  if (unit === 'bytes_per_second') return 1024 ** 2
+  if (unit === 'ratio') return 0.01
+  return 1
+}
+
+function displayValues(series: ResourceMetricSeries): number[] {
+  if (series.unit === 'ratio') {
+    return series.points.map((point) => Number((point.value * 100).toFixed(3)))
+  }
+  const scale = valueScale(series.unit)
+  return series.points.map((point) => Number((point.value / scale).toFixed(3)))
+}
+
+function latestDisplay(series: ResourceMetricSeries): string {
+  const latest = series.points[series.points.length - 1]?.value ?? 0
+  if (series.unit === 'cores') return `${latest.toFixed(2)} cores`
+  if (series.unit === 'bytes') return `${(latest / 1024 ** 3).toFixed(2)} GiB`
+  if (series.unit === 'bytes_per_second') return `${(latest / 1024 ** 2).toFixed(2)} MiB/s`
+  if (series.unit === 'ratio') return `${(latest * 100).toFixed(2)} %`
+  if (series.unit === 'replicas') return `${latest.toFixed(0)} replicas`
+  return String(latest)
+}
+
+function unitLabel(series: ResourceMetricSeries): string {
+  if (series.unit === 'cores') return 'cores'
+  if (series.unit === 'bytes') return 'GiB'
+  if (series.unit === 'bytes_per_second') return 'MiB/s'
+  if (series.unit === 'ratio') return '%'
+  if (series.unit === 'replicas') return 'replicas'
+  return series.unit
+}
+
+function chartColor(index: number): string {
+  const palette = ['#69bfa0', '#4ea8de', '#f0a868', '#8f8cf2', '#62c7b3', '#d981a7']
+  return palette[index % palette.length]
 }
 
 async function onFilters(payload: { range: number; namespace?: string; env: string }) {

@@ -67,7 +67,7 @@ def get_metrics_service() -> MetricsService:
 
 @lru_cache
 def get_resource_service() -> ResourceService:
-    return ResourceService(get_k8s_collector(), get_audit_repository())
+    return ResourceService(get_k8s_collector(), get_prometheus_collector(), get_audit_repository())
 
 
 @lru_cache

@@ -39,6 +39,8 @@ async def get_resource_detail(
     name: str,
     namespace: str = Query(...),
     log_lines: int = Query(default=120, ge=10, le=2000),
+    range_minutes: int = Query(default=10, ge=5, le=120),
+    step_seconds: int = Query(default=30, ge=15, le=300),
     _user=Depends(get_current_user),
     service=Depends(get_resource_service),
 ) -> ResourceDetailResponse:
@@ -48,6 +50,8 @@ async def get_resource_detail(
             name=name,
             namespace=namespace,
             log_lines=log_lines,
+            range_minutes=range_minutes,
+            step_seconds=step_seconds,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

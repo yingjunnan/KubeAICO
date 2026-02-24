@@ -1,4 +1,4 @@
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 const route = useRoute();
 const iconPaths = {
@@ -35,8 +35,22 @@ const currentKind = computed(() => String(route.query.kind ?? '').toLowerCase())
 const isWorkloadsGroupActive = computed(() => route.path === '/workloads' &&
     (currentKind.value.length === 0 || workloadKinds.has(currentKind.value)));
 const isServicesGroupActive = computed(() => route.path === '/workloads' && serviceKinds.has(currentKind.value));
+const workloadsExpanded = ref(true);
+const servicesExpanded = ref(true);
+watch([isWorkloadsGroupActive, isServicesGroupActive], ([workloadsActive, servicesActive]) => {
+    if (workloadsActive)
+        workloadsExpanded.value = true;
+    if (servicesActive)
+        servicesExpanded.value = true;
+}, { immediate: true });
 function isKindActive(kind) {
     return route.path === '/workloads' && currentKind.value === kind;
+}
+function toggleWorkloads() {
+    workloadsExpanded.value = !workloadsExpanded.value;
+}
+function toggleServices() {
+    servicesExpanded.value = !servicesExpanded.value;
 }
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
@@ -91,20 +105,16 @@ var __VLS_3;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
     ...{ class: "nav-group" },
 });
-const __VLS_4 = {}.RouterLink;
-/** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
-// @ts-ignore
-const __VLS_5 = __VLS_asFunctionalComponent(__VLS_4, new __VLS_4({
-    to: ({ path: '/workloads', query: { kind: 'deployment' } }),
+__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (__VLS_ctx.toggleWorkloads) },
+    type: "button",
     ...{ class: "nav-item nav-group-header" },
     ...{ class: ({ 'is-active': __VLS_ctx.isWorkloadsGroupActive }) },
-}));
-const __VLS_6 = __VLS_5({
-    to: ({ path: '/workloads', query: { kind: 'deployment' } }),
-    ...{ class: "nav-item nav-group-header" },
-    ...{ class: ({ 'is-active': __VLS_ctx.isWorkloadsGroupActive }) },
-}, ...__VLS_functionalComponentArgsRest(__VLS_5));
-__VLS_7.slots.default;
+    'aria-expanded': (__VLS_ctx.workloadsExpanded ? 'true' : 'false'),
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "nav-group-label" },
+});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "nav-icon-wrap" },
     'aria-hidden': "true",
@@ -125,10 +135,38 @@ for (const [path, idx] of __VLS_getVForSourceType((__VLS_ctx.iconPaths.workloads
     });
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-var __VLS_7;
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "nav-group-toggle" },
+    ...{ class: ({ expanded: __VLS_ctx.workloadsExpanded }) },
+    'aria-hidden': "true",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.svg, __VLS_intrinsicElements.svg)({
+    viewBox: "0 0 24 24",
+    fill: "none",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.path)({
+    d: "M9 6l6 6-6 6",
+    stroke: "currentColor",
+    'stroke-width': "2",
+    'stroke-linecap': "round",
+    'stroke-linejoin': "round",
+});
+const __VLS_4 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_5 = __VLS_asFunctionalComponent(__VLS_4, new __VLS_4({
+    name: "nav-collapse",
+    persisted: true,
+}));
+const __VLS_6 = __VLS_5({
+    name: "nav-collapse",
+    persisted: true,
+}, ...__VLS_functionalComponentArgsRest(__VLS_5));
+__VLS_7.slots.default;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "nav-submenu" },
 });
+__VLS_asFunctionalDirective(__VLS_directives.vShow)(null, { ...__VLS_directiveBindingRestFields, value: (__VLS_ctx.workloadsExpanded) }, null, null);
 for (const [item] of __VLS_getVForSourceType((__VLS_ctx.workloadChildren))) {
     const __VLS_8 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
@@ -169,23 +207,20 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.workloadChildren))) {
     (item.label);
     var __VLS_11;
 }
+var __VLS_7;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
     ...{ class: "nav-group" },
 });
-const __VLS_12 = {}.RouterLink;
-/** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
-// @ts-ignore
-const __VLS_13 = __VLS_asFunctionalComponent(__VLS_12, new __VLS_12({
-    to: ({ path: '/workloads', query: { kind: 'service' } }),
+__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (__VLS_ctx.toggleServices) },
+    type: "button",
     ...{ class: "nav-item nav-group-header" },
     ...{ class: ({ 'is-active': __VLS_ctx.isServicesGroupActive }) },
-}));
-const __VLS_14 = __VLS_13({
-    to: ({ path: '/workloads', query: { kind: 'service' } }),
-    ...{ class: "nav-item nav-group-header" },
-    ...{ class: ({ 'is-active': __VLS_ctx.isServicesGroupActive }) },
-}, ...__VLS_functionalComponentArgsRest(__VLS_13));
-__VLS_15.slots.default;
+    'aria-expanded': (__VLS_ctx.servicesExpanded ? 'true' : 'false'),
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "nav-group-label" },
+});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "nav-icon-wrap" },
     'aria-hidden': "true",
@@ -206,10 +241,38 @@ for (const [path, idx] of __VLS_getVForSourceType((__VLS_ctx.iconPaths.services)
     });
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-var __VLS_15;
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "nav-group-toggle" },
+    ...{ class: ({ expanded: __VLS_ctx.servicesExpanded }) },
+    'aria-hidden': "true",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.svg, __VLS_intrinsicElements.svg)({
+    viewBox: "0 0 24 24",
+    fill: "none",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.path)({
+    d: "M9 6l6 6-6 6",
+    stroke: "currentColor",
+    'stroke-width': "2",
+    'stroke-linecap': "round",
+    'stroke-linejoin': "round",
+});
+const __VLS_12 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_13 = __VLS_asFunctionalComponent(__VLS_12, new __VLS_12({
+    name: "nav-collapse",
+    persisted: true,
+}));
+const __VLS_14 = __VLS_13({
+    name: "nav-collapse",
+    persisted: true,
+}, ...__VLS_functionalComponentArgsRest(__VLS_13));
+__VLS_15.slots.default;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "nav-submenu" },
 });
+__VLS_asFunctionalDirective(__VLS_directives.vShow)(null, { ...__VLS_directiveBindingRestFields, value: (__VLS_ctx.servicesExpanded) }, null, null);
 for (const [item] of __VLS_getVForSourceType((__VLS_ctx.serviceChildren))) {
     const __VLS_16 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
@@ -250,6 +313,7 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.serviceChildren))) {
     (item.label);
     var __VLS_19;
 }
+var __VLS_15;
 const __VLS_20 = {}.RouterLink;
 /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
 // @ts-ignore
@@ -364,8 +428,10 @@ var __VLS_31;
 /** @type {__VLS_StyleScopedClasses['nav-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-group-header']} */ ;
+/** @type {__VLS_StyleScopedClasses['nav-group-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-icon-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['nav-group-toggle']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-submenu']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-subitem']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-sub-icon-wrap']} */ ;
@@ -373,8 +439,10 @@ var __VLS_31;
 /** @type {__VLS_StyleScopedClasses['nav-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-group-header']} */ ;
+/** @type {__VLS_StyleScopedClasses['nav-group-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-icon-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['nav-group-toggle']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-submenu']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-subitem']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-sub-icon-wrap']} */ ;
@@ -398,7 +466,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             serviceChildren: serviceChildren,
             isWorkloadsGroupActive: isWorkloadsGroupActive,
             isServicesGroupActive: isServicesGroupActive,
+            workloadsExpanded: workloadsExpanded,
+            servicesExpanded: servicesExpanded,
             isKindActive: isKindActive,
+            toggleWorkloads: toggleWorkloads,
+            toggleServices: toggleServices,
         };
     },
 });

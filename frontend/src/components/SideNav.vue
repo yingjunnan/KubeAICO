@@ -24,28 +24,38 @@
       </RouterLink>
 
       <section class="nav-group">
-        <RouterLink
-          :to="{ path: '/workloads', query: { kind: 'deployment' } }"
+        <button
+          type="button"
           class="nav-item nav-group-header"
           :class="{ 'is-active': isWorkloadsGroupActive }"
+          :aria-expanded="workloadsExpanded ? 'true' : 'false'"
+          @click="toggleWorkloads"
         >
-          <span class="nav-icon-wrap" aria-hidden="true">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
-              <path
-                v-for="(path, idx) in iconPaths.workloads"
-                :key="`workloads-${idx}`"
-                :d="path"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
+          <span class="nav-group-label">
+            <span class="nav-icon-wrap" aria-hidden="true">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+                <path
+                  v-for="(path, idx) in iconPaths.workloads"
+                  :key="`workloads-${idx}`"
+                  :d="path"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <span>Workloads</span>
+          </span>
+          <span class="nav-group-toggle" :class="{ expanded: workloadsExpanded }" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </span>
-          <span>Workloads</span>
-        </RouterLink>
+        </button>
 
-        <div class="nav-submenu">
+        <Transition name="nav-collapse">
+        <div v-show="workloadsExpanded" class="nav-submenu">
           <RouterLink
             v-for="item in workloadChildren"
             :key="item.kind"
@@ -69,31 +79,42 @@
             <span>{{ item.label }}</span>
           </RouterLink>
         </div>
+        </Transition>
       </section>
 
       <section class="nav-group">
-        <RouterLink
-          :to="{ path: '/workloads', query: { kind: 'service' } }"
+        <button
+          type="button"
           class="nav-item nav-group-header"
           :class="{ 'is-active': isServicesGroupActive }"
+          :aria-expanded="servicesExpanded ? 'true' : 'false'"
+          @click="toggleServices"
         >
-          <span class="nav-icon-wrap" aria-hidden="true">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
-              <path
-                v-for="(path, idx) in iconPaths.services"
-                :key="`services-${idx}`"
-                :d="path"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
+          <span class="nav-group-label">
+            <span class="nav-icon-wrap" aria-hidden="true">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+                <path
+                  v-for="(path, idx) in iconPaths.services"
+                  :key="`services-${idx}`"
+                  :d="path"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <span>Services</span>
+          </span>
+          <span class="nav-group-toggle" :class="{ expanded: servicesExpanded }" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </span>
-          <span>Services</span>
-        </RouterLink>
+        </button>
 
-        <div class="nav-submenu">
+        <Transition name="nav-collapse">
+        <div v-show="servicesExpanded" class="nav-submenu">
           <RouterLink
             v-for="item in serviceChildren"
             :key="item.kind"
@@ -117,6 +138,7 @@
             <span>{{ item.label }}</span>
           </RouterLink>
         </div>
+        </Transition>
       </section>
 
       <RouterLink to="/alerts" class="nav-item" :class="{ 'is-active': route.path === '/alerts' }">
@@ -174,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -231,7 +253,23 @@ const isServicesGroupActive = computed(
   () => route.path === '/workloads' && serviceKinds.has(currentKind.value),
 )
 
+const workloadsExpanded = ref(true)
+const servicesExpanded = ref(true)
+
+watch([isWorkloadsGroupActive, isServicesGroupActive], ([workloadsActive, servicesActive]) => {
+  if (workloadsActive) workloadsExpanded.value = true
+  if (servicesActive) servicesExpanded.value = true
+}, { immediate: true })
+
 function isKindActive(kind: string): boolean {
   return route.path === '/workloads' && currentKind.value === kind
+}
+
+function toggleWorkloads(): void {
+  workloadsExpanded.value = !workloadsExpanded.value
+}
+
+function toggleServices(): void {
+  servicesExpanded.value = !servicesExpanded.value
 }
 </script>

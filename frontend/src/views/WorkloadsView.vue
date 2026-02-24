@@ -182,6 +182,7 @@ const labelSelector = ref('')
 const resources = ref<WorkloadItem[]>([])
 const detail = ref<ResourceDetailResponse | null>(null)
 const scaleReplicas = ref(1)
+let detailRequestSeq = 0
 
 const operationModal = ref<{
   visible: boolean
@@ -205,6 +206,20 @@ async function loadResources() {
     label_selector: labelSelector.value || undefined,
   })
   resources.value = response.items
+
+  if (
+    detail.value &&
+    (
+      detail.value.item.kind !== kind.value ||
+      !resources.value.some(
+        (item) =>
+          item.name === detail.value?.item.name &&
+          item.namespace === detail.value?.item.namespace,
+      )
+    )
+  ) {
+    detail.value = null
+  }
 }
 
 async function syncKindFromRoute(nextKindRaw: unknown) {
@@ -281,7 +296,12 @@ async function submitOperation() {
 }
 
 async function openDetail(name: string, targetNamespace: string) {
-  detail.value = await getResourceDetail({
+  const requestSeq = ++detailRequestSeq
+  const requestedKind = kind.value
+  const requestedName = name
+  const requestedNamespace = targetNamespace
+
+  const response = await getResourceDetail({
     kind: kind.value,
     name,
     namespace: targetNamespace,
@@ -289,6 +309,18 @@ async function openDetail(name: string, targetNamespace: string) {
     range_minutes: 10,
     step_seconds: 30,
   })
+
+  if (
+    requestSeq !== detailRequestSeq ||
+    kind.value !== requestedKind ||
+    !resources.value.some(
+      (item) => item.name === requestedName && item.namespace === requestedNamespace,
+    )
+  ) {
+    return
+  }
+
+  detail.value = response
 }
 
 function axisFromPoints(points: { ts: number; value: number }[]): string[] {
@@ -350,6 +382,8 @@ onMounted(async () => {
 watch(
   () => route.query.kind,
   async (nextKind) => {
+    detailRequestSeq += 1
+    detail.value = null
     await syncKindFromRoute(nextKind)
     await loadResources()
   },

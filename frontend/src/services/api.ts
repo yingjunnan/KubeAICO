@@ -2,9 +2,11 @@ import axios from 'axios'
 import type {
   AIAnalyzeTaskRead,
   AIAnalyzeTaskResponse,
+  AuditLogListResponse,
   AlertListResponse,
   ClusterSummary,
   LoginResponse,
+  ResourceDetailResponse,
   ResourceKind,
   TimeseriesResponse,
   UserRead,
@@ -61,6 +63,17 @@ export async function getResources(params: {
   return data
 }
 
+export async function getResourceDetail(params: {
+  kind: ResourceKind
+  name: string
+  namespace: string
+  log_lines?: number
+}): Promise<ResourceDetailResponse> {
+  const { kind, name, ...query } = params
+  const { data } = await api.get<ResourceDetailResponse>(`/resources/${kind}/${name}/detail`, { params: query })
+  return data
+}
+
 export async function scaleResource(params: {
   kind: ResourceKind
   name: string
@@ -85,6 +98,17 @@ export async function getAlerts(params?: {
   limit?: number
 }): Promise<AlertListResponse> {
   const { data } = await api.get<AlertListResponse>('/alerts', { params })
+  return data
+}
+
+export async function getAuditLogs(params?: {
+  limit?: number
+  offset?: number
+  action?: string
+  kind?: string
+  namespace?: string
+}): Promise<AuditLogListResponse> {
+  const { data } = await api.get<AuditLogListResponse>('/audit/logs', { params })
   return data
 }
 

@@ -6,6 +6,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.schemas.resource import (
     ResourceActionResponse,
+    ResourceDetailResponse,
     ResourceKind,
     RestartRequest,
     ScaleRequest,
@@ -30,6 +31,26 @@ async def list_resources(
         label_selector=label_selector,
         status=status_filter,
     )
+
+
+@router.get("/{kind}/{name}/detail", response_model=ResourceDetailResponse)
+async def get_resource_detail(
+    kind: ResourceKind,
+    name: str,
+    namespace: str = Query(...),
+    log_lines: int = Query(default=120, ge=10, le=2000),
+    _user=Depends(get_current_user),
+    service=Depends(get_resource_service),
+) -> ResourceDetailResponse:
+    try:
+        return await service.get_resource_detail(
+            kind=kind,
+            name=name,
+            namespace=namespace,
+            log_lines=log_lines,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/{kind}/{name}/scale", response_model=ResourceActionResponse)

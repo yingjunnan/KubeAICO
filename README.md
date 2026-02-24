@@ -20,6 +20,7 @@ KubeAICO is a Kubernetes operations dashboard MVP with:
   - Pod
   - Service
   - Ingress
+- Resource detail API with related events + pod logs
 - Scale and rollout-restart operations with audit log
 - Alert aggregation from K8s events + Prometheus firing alerts
 - AI analysis interface:
@@ -31,6 +32,7 @@ KubeAICO is a Kubernetes operations dashboard MVP with:
   - Overview dashboard
   - Resource management
   - Alerts
+  - Audit logs
   - AI analysis
 
 ## Repository Structure
@@ -97,9 +99,11 @@ docker compose up --build
 - `GET /api/v1/overview/summary`
 - `GET /api/v1/metrics/timeseries`
 - `GET /api/v1/resources/{kind}`
+- `GET /api/v1/resources/{kind}/{name}/detail`
 - `POST /api/v1/resources/{kind}/{name}/scale`
 - `POST /api/v1/resources/{kind}/{name}/rollout-restart`
 - `GET /api/v1/alerts`
+- `GET /api/v1/audit/logs`
 - `POST /api/v1/ai/analyze`
 - `GET /api/v1/ai/tasks/{task_id}`
 - `WS /ws/overview`

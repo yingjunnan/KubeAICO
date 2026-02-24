@@ -20,6 +20,7 @@ const items = [
   { name: 'pods', label: 'Pods', to: { path: '/workloads', query: { kind: 'pod' } }, icon: 'PD' },
   { name: 'services', label: 'Services', to: { path: '/workloads', query: { kind: 'service' } }, icon: 'SV' },
   { name: 'alerts', label: 'Alerts', to: '/alerts', icon: 'AL' },
+  { name: 'audit', label: 'Audit', to: '/audit', icon: 'AU' },
   { name: 'ai', label: 'AI', to: '/ai', icon: 'AI' },
 ]
 </script>

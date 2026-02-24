@@ -43,3 +43,16 @@ class ResourceActionResponse(BaseModel):
     status: str
     message: str
     audit_id: int | None = None
+
+
+class ResourceEvent(BaseModel):
+    type: str
+    reason: str
+    message: str
+    timestamp: str
+
+
+class ResourceDetailResponse(BaseModel):
+    item: WorkloadItem
+    events: list[ResourceEvent] = Field(default_factory=list)
+    logs: list[str] = Field(default_factory=list)

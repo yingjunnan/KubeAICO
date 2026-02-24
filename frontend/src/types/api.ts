@@ -78,6 +78,19 @@ export interface WorkloadListResponse {
   items: WorkloadItem[]
 }
 
+export interface ResourceEvent {
+  type: string
+  reason: string
+  message: string
+  timestamp: string
+}
+
+export interface ResourceDetailResponse {
+  item: WorkloadItem
+  events: ResourceEvent[]
+  logs: string[]
+}
+
 export interface AlertItem {
   id: string
   severity: 'P1' | 'P2' | 'P3'
@@ -92,6 +105,25 @@ export interface AlertItem {
 export interface AlertListResponse {
   total: number
   items: AlertItem[]
+}
+
+export interface AuditLogItem {
+  id: number
+  user_id?: number
+  action: string
+  target_kind: string
+  target_name: string
+  namespace?: string
+  status: string
+  message?: string
+  created_at: string
+}
+
+export interface AuditLogListResponse {
+  total: number
+  limit: number
+  offset: number
+  items: AuditLogItem[]
 }
 
 export interface AIAnalyzeTaskResponse {

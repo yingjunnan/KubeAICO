@@ -17,6 +17,7 @@ from app.repository.audit import AuditRepository
 from app.repository.user import UserRepository
 from app.service.ai import AIService
 from app.service.alerts import AlertService
+from app.service.audit import AuditService
 from app.service.metrics import MetricsService
 from app.service.overview import OverviewService
 from app.service.resources import ResourceService
@@ -67,6 +68,11 @@ def get_metrics_service() -> MetricsService:
 @lru_cache
 def get_resource_service() -> ResourceService:
     return ResourceService(get_k8s_collector(), get_audit_repository())
+
+
+@lru_cache
+def get_audit_service() -> AuditService:
+    return AuditService(get_audit_repository())
 
 
 @lru_cache

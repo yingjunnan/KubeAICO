@@ -100,6 +100,119 @@ class KubernetesCollector:
         payload = await self._request("GET", path, params=params)
         return payload.get("items", [])
 
+    async def get_resource(self, kind: str, name: str, namespace: str) -> dict[str, Any]:
+        if kind not in self.kind_to_resource:
+            raise ValueError(f"Unsupported kind: {kind}")
+
+        if self._use_mock:
+            for item in self._mock_state.get(kind, []):
+                metadata = item.get("metadata", {})
+                if metadata.get("name") == name and metadata.get("namespace") == namespace:
+                    return item
+            raise ValueError("Resource not found")
+
+        path = self._item_path(kind=kind, name=name, namespace=namespace)
+        return await self._request("GET", path)
+
+    async def get_related_events(self, kind: str, name: str, namespace: str) -> list[dict[str, Any]]:
+        events = await self.list_events(namespace=namespace)
+        expected_kind = {
+            "deployment": "Deployment",
+            "statefulset": "StatefulSet",
+            "daemonset": "DaemonSet",
+            "pod": "Pod",
+            "service": "Service",
+            "ingress": "Ingress",
+        }.get(kind, kind)
+
+        related: list[dict[str, Any]] = []
+        for event in events:
+            involved = event.get("involvedObject", {})
+            if (
+                involved.get("name") == name
+                and involved.get("namespace") == namespace
+                and involved.get("kind") == expected_kind
+            ):
+                related.append(event)
+                continue
+
+            # Fallback for incomplete event payloads.
+            message = event.get("message", "")
+            event_ns = event.get("metadata", {}).get("namespace")
+            if event_ns == namespace and name in message:
+                related.append(event)
+
+        return related
+
+    async def get_resource_logs(
+        self,
+        kind: str,
+        name: str,
+        namespace: str,
+        tail_lines: int = 120,
+    ) -> list[str]:
+        if kind == "pod":
+            return await self.get_pod_logs(namespace=namespace, pod_name=name, tail_lines=tail_lines)
+
+        if self._use_mock:
+            pods = await self.list_pods(namespace=namespace)
+            candidates = [
+                pod
+                for pod in pods
+                if pod.get("metadata", {}).get("labels", {}).get("app") in {name, name.split("-")[0]}
+            ]
+            if not candidates:
+                return [f"No pod logs available for {kind}/{name} in namespace {namespace}."]
+            pod_name = candidates[0].get("metadata", {}).get("name", "")
+            return await self.get_pod_logs(namespace=namespace, pod_name=pod_name, tail_lines=tail_lines)
+
+        try:
+            resource = await self.get_resource(kind=kind, name=name, namespace=namespace)
+        except ValueError:
+            return []
+
+        match_labels = (
+            resource.get("spec", {})
+            .get("selector", {})
+            .get("matchLabels", {})
+        )
+        if not match_labels:
+            return []
+
+        selector = self._build_label_selector(match_labels)
+        pods = await self.list_resources(kind="pod", namespace=namespace, label_selector=selector)
+        if not pods:
+            return []
+
+        pod_name = pods[0].get("metadata", {}).get("name")
+        if not pod_name:
+            return []
+        return await self.get_pod_logs(namespace=namespace, pod_name=pod_name, tail_lines=tail_lines)
+
+    async def get_pod_logs(self, namespace: str, pod_name: str, tail_lines: int = 120) -> list[str]:
+        if self._use_mock:
+            key = f"{namespace}/{pod_name}"
+            lines = self._mock_state.get("pod_logs", {}).get(key)
+            if lines:
+                return lines[:tail_lines]
+            return [f"No mock logs found for pod {pod_name}."]
+
+        if not self.settings.k8s_api_url:
+            raise ValueError("k8s_api_url is required for real cluster mode")
+
+        headers = {"Accept": "text/plain"}
+        if self.settings.k8s_bearer_token:
+            headers["Authorization"] = f"Bearer {self.settings.k8s_bearer_token}"
+
+        client = await self._get_client()
+        response = await client.get(
+            f"{self.settings.k8s_api_url.rstrip('/')}/api/v1/namespaces/{namespace}/pods/{pod_name}/log",
+            params={"tailLines": tail_lines},
+            headers=headers,
+        )
+        response.raise_for_status()
+        return [line for line in response.text.splitlines() if line]
+
     async def scale_workload(
         self,
         kind: str,
@@ -178,6 +291,14 @@ class KubernetesCollector:
             return f"{base}/namespaces/{namespace}/{resource}"
         return f"{base}/{resource}"
 
+    def _item_path(self, kind: str, name: str, namespace: str) -> str:
+        api_version, resource = self.kind_to_resource[kind]
+        if api_version == "v1":
+            base = "/api/v1"
+        else:
+            base = f"/apis/{api_version}"
+        return f"{base}/namespaces/{namespace}/{resource}/{name}"
+
     async def _request(
         self,
         method: str,
@@ -246,6 +367,7 @@ class KubernetesCollector:
             "events": [
                 {
                     "metadata": {"name": "event-1", "namespace": "prod"},
+                    "involvedObject": {"kind": "Deployment", "name": "billing", "namespace": "prod"},
                     "type": "Warning",
                     "reason": "BackOff",
                     "message": "Back-off restarting failed container",
@@ -253,6 +375,7 @@ class KubernetesCollector:
                 },
                 {
                     "metadata": {"name": "event-2", "namespace": "monitoring"},
+                    "involvedObject": {"kind": "DaemonSet", "name": "node-exporter", "namespace": "monitoring"},
                     "type": "Warning",
                     "reason": "OOMKilled",
                     "message": "Container metrics-agent was OOM killed",
@@ -260,6 +383,7 @@ class KubernetesCollector:
                 },
                 {
                     "metadata": {"name": "event-3", "namespace": "default"},
+                    "involvedObject": {"kind": "Deployment", "name": "web", "namespace": "default"},
                     "type": "Normal",
                     "reason": "ScalingReplicaSet",
                     "message": "Scaled up replica set web to 3",
@@ -289,7 +413,25 @@ class KubernetesCollector:
             "ingress": [
                 self._mock_workload("main-ingress", "default", "ingress", None, None),
             ],
+            "pod_logs": {
+                "default/web-7b6f": [
+                    "2026-02-24T14:00:11Z INFO web server started on :8080",
+                    "2026-02-24T14:02:35Z INFO request_id=1f8a response=200 duration_ms=17",
+                    "2026-02-24T14:03:06Z WARN upstream latency high p95=824ms",
+                ],
+                "default/api-8d4f": [
+                    "2026-02-24T14:00:01Z INFO API bootstrap complete",
+                    "2026-02-24T14:04:22Z ERROR db timeout after 3 retries",
+                ],
+                "prod/worker-559c": [
+                    "2026-02-24T14:00:00Z INFO worker waiting for queue assignment",
+                ],
+            },
         }
+
+    @staticmethod
+    def _build_label_selector(labels: dict[str, str]) -> str:
+        return ",".join(f"{key}={value}" for key, value in labels.items())
 
     def _mock_workload(
         self,

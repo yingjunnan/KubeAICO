@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.collector.kubernetes import KubernetesCollector
 from app.db.models import User
 from app.repository.audit import AuditRepository
-from app.schemas.resource import WorkloadItem, WorkloadListResponse
+from app.schemas.resource import ResourceDetailResponse, ResourceEvent, WorkloadItem, WorkloadListResponse
 
 
 class ResourceService:
@@ -30,6 +30,41 @@ class ResourceService:
 
         return WorkloadListResponse(kind=kind, total=len(workloads), items=workloads)
 
+    async def get_resource_detail(
+        self,
+        *,
+        kind: str,
+        name: str,
+        namespace: str,
+        log_lines: int = 120,
+    ) -> ResourceDetailResponse:
+        resource = await self.k8s_collector.get_resource(kind=kind, name=name, namespace=namespace)
+        workload = self._to_workload_item(kind, resource)
+
+        events_raw = await self.k8s_collector.get_related_events(
+            kind=kind,
+            name=name,
+            namespace=namespace,
+        )
+        events = [
+            ResourceEvent(
+                type=event.get("type", "Normal"),
+                reason=event.get("reason", "Unknown"),
+                message=event.get("message", ""),
+                timestamp=self._normalize_event_timestamp(event),
+            )
+            for event in events_raw
+        ]
+
+        logs = await self.k8s_collector.get_resource_logs(
+            kind=kind,
+            name=name,
+            namespace=namespace,
+            tail_lines=log_lines,
+        )
+
+        return ResourceDetailResponse(item=workload, events=events, logs=logs)
+
     async def scale_workload(
         self,
         *,
@@ -40,6 +75,9 @@ class ResourceService:
         namespace: str,
         replicas: int,
     ) -> int:
+        if replicas > 1000:
+            raise ValueError("Scale target is too high; max replicas is 1000 in current policy")
+
         await self.k8s_collector.scale_workload(
             kind=kind,
             name=name,
@@ -116,4 +154,13 @@ class ResourceService:
             ready_ratio=ready_ratio,
             restarts=restarts,
             labels=metadata.get("labels") or {},
+        )
+
+    @staticmethod
+    def _normalize_event_timestamp(event: dict) -> str:
+        return (
+            event.get("lastTimestamp")
+            or event.get("eventTime")
+            or event.get("firstTimestamp")
+            or ""
         )

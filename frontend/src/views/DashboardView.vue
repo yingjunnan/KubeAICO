@@ -45,7 +45,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AppShell from '../components/AppShell.vue'
 import MetricCard from '../components/MetricCard.vue'
 import TrendChart from '../components/TrendChart.vue'
-import { getOverviewSummary, getTimeseries, getWsOverviewUrl } from '../services/api'
+import { clearAuthAndRedirectToLogin, getOverviewSummary, getTimeseries, getWsOverviewUrl } from '../services/api'
 import type { ClusterSummary } from '../types/api'
 
 const summary = ref<ClusterSummary | null>(null)
@@ -115,6 +115,11 @@ function connectWs() {
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data) as ClusterSummary
     summary.value = data
+  }
+  ws.onclose = (event) => {
+    if (event.code === 4401 || event.code === 4403) {
+      clearAuthAndRedirectToLogin()
+    }
   }
 }
 

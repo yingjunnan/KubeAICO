@@ -1,14 +1,38 @@
 import axios from 'axios';
+const TOKEN_KEY = 'kubeaico_token';
+let redirectingToLogin = false;
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
     timeout: 15000,
 });
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('kubeaico_token');
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
+});
+function shouldIgnoreAuthRedirect(url) {
+    const value = String(url ?? '');
+    return value.includes('/auth/login');
+}
+export function clearAuthAndRedirectToLogin() {
+    localStorage.removeItem(TOKEN_KEY);
+    if (window.location.pathname === '/login') {
+        return;
+    }
+    if (redirectingToLogin) {
+        return;
+    }
+    redirectingToLogin = true;
+    window.location.assign('/login');
+}
+api.interceptors.response.use((response) => response, (error) => {
+    const status = error?.response?.status;
+    if (status === 401 && !shouldIgnoreAuthRedirect(error?.config?.url)) {
+        clearAuthAndRedirectToLogin();
+    }
+    return Promise.reject(error);
 });
 export async function login(username, password) {
     const { data } = await api.post('/auth/login', { username, password });

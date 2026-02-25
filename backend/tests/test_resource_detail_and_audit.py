@@ -32,11 +32,23 @@ def test_resource_detail_and_audit_logs_flow() -> None:
         assert detail_resp.status_code == 200
         detail_payload = detail_resp.json()
         assert detail_payload["item"]["name"] == "web"
+        assert isinstance(detail_payload["manifest"], dict)
+        assert detail_payload["manifest"]["metadata"]["name"] == "web"
         assert isinstance(detail_payload["events"], list)
-        assert isinstance(detail_payload["logs"], list)
         assert "metrics" in detail_payload
         assert detail_payload["metrics"]["range_minutes"] == 10
         assert len(detail_payload["metrics"]["series"]) >= 1
+
+        logs_resp = client.get(
+            "/api/v1/resources/deployment/web/logs",
+            params={"namespace": "default", "log_lines": 100},
+            headers=headers,
+        )
+        assert logs_resp.status_code == 200
+        logs_payload = logs_resp.json()
+        assert logs_payload["kind"] == "deployment"
+        assert logs_payload["name"] == "web"
+        assert isinstance(logs_payload["logs"], list)
 
         scale_resp = client.post(
             "/api/v1/resources/deployment/web/scale",

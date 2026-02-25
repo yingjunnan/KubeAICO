@@ -252,19 +252,34 @@ class KubernetesCollector:
         if not k8s_api_url:
             raise ValueError("k8s_api_url is required for real cluster mode")
 
-        headers = {"Accept": "text/plain"}
+        headers: dict[str, str] = {}
         k8s_bearer_token = self._resolve_k8s_bearer_token(cluster)
         if k8s_bearer_token:
             headers["Authorization"] = f"Bearer {k8s_bearer_token}"
 
+        endpoint = f"{k8s_api_url.rstrip('/')}/api/v1/namespaces/{namespace}/pods/{pod_name}/log"
+        params = {"tailLines": tail_lines}
         client = await self._get_client()
-        response = await client.get(
-            f"{k8s_api_url.rstrip('/')}/api/v1/namespaces/{namespace}/pods/{pod_name}/log",
-            params={"tailLines": tail_lines},
-            headers=headers,
-        )
-        response.raise_for_status()
-        return [line for line in response.text.splitlines() if line]
+        try:
+            response = await client.get(endpoint, params=params, headers=headers)
+        except httpx.RequestError as exc:
+            return [f"Unable to fetch pod logs: {exc.__class__.__name__}."]
+
+        if response.status_code == 406:
+            # Some API gateways reject logs subresource unless Accept is wildcard.
+            retry_headers = dict(headers)
+            retry_headers["Accept"] = "*/*"
+            try:
+                response = await client.get(endpoint, params=params, headers=retry_headers)
+            except httpx.RequestError as exc:
+                return [f"Unable to fetch pod logs after retry: {exc.__class__.__name__}."]
+
+        if response.is_success:
+            return [line for line in response.text.splitlines() if line]
+
+        message = self._extract_error_message(response)
+        suffix = f" {message}" if message else ""
+        return [f"Unable to fetch pod logs (HTTP {response.status_code}).{suffix}"]
 
     async def scale_workload(
         self,
@@ -511,6 +526,26 @@ class KubernetesCollector:
     @staticmethod
     def _build_label_selector(labels: dict[str, str]) -> str:
         return ",".join(f"{key}={value}" for key, value in labels.items())
+
+    @staticmethod
+    def _extract_error_message(response: httpx.Response) -> str:
+        content_type = response.headers.get("content-type", "").lower()
+        if "application/json" in content_type:
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = None
+            if isinstance(payload, dict):
+                for key in ("message", "detail", "error", "reason"):
+                    value = payload.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+
+        text = response.text.strip()
+        if not text:
+            return ""
+        first_line = text.splitlines()[0].strip()
+        return first_line[:240]
 
     def _mock_workload(
         self,

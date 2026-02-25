@@ -66,7 +66,12 @@
     <section v-if="detail" class="card detail-panel">
       <div class="detail-header">
         <h3>{{ detail.item.kind }}/{{ detail.item.name }}</h3>
-        <button type="button" @click="detail = null">Close</button>
+        <div class="detail-header-actions">
+          <button type="button" @click="loadDetailLogs" :disabled="detailLogs.loading">
+            {{ detailLogs.loading ? 'Loading Logs...' : detailLogs.loaded ? 'Reload Logs' : 'Load Logs' }}
+          </button>
+          <button type="button" @click="closeDetailPanel">Close</button>
+        </div>
       </div>
       <p class="hint">
         Namespace: {{ detail.item.namespace }} | Status: {{ detail.item.status }} |
@@ -87,6 +92,10 @@
 
       <div class="detail-grid">
         <article>
+          <h4>Resource Manifest (YAML)</h4>
+          <pre>{{ detailManifestYaml }}</pre>
+        </article>
+        <article>
           <h4>Recent Events</h4>
           <ul>
             <li v-for="(event, idx) in detail.events" :key="`${event.reason}-${idx}`">
@@ -96,11 +105,21 @@
             <li v-if="detail.events.length === 0" class="hint">No related events.</li>
           </ul>
         </article>
-        <article>
-          <h4>Recent Logs</h4>
-          <pre>{{ detail.logs.join('\n') || 'No logs available.' }}</pre>
-        </article>
       </div>
+
+      <article class="detail-logs-card">
+        <div class="detail-logs-header">
+          <h4>Recent Logs</h4>
+          <button type="button" @click="loadDetailLogs" :disabled="detailLogs.loading">
+            {{ detailLogs.loading ? 'Loading...' : detailLogs.loaded ? 'Refresh' : 'Load' }}
+          </button>
+        </div>
+        <p v-if="!detailLogs.loaded && !detailLogs.loading && !detailLogs.error" class="hint">
+          Logs are loaded on demand. Click "Load Logs" to fetch the latest lines.
+        </p>
+        <p v-if="detailLogs.error" class="error-text">{{ detailLogs.error }}</p>
+        <pre v-if="detailLogs.loaded">{{ detailLogs.lines.join('\n') || 'No logs available.' }}</pre>
+      </article>
     </section>
 
     <Teleport to="body">
@@ -162,11 +181,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import TrendChart from '../components/TrendChart.vue'
-import { getResourceDetail, getResources, rolloutRestart, scaleResource } from '../services/api'
+import { getResourceDetail, getResourceLogs, getResources, rolloutRestart, scaleResource } from '../services/api'
 import type { ResourceDetailResponse, ResourceKind, ResourceMetricSeries, WorkloadItem } from '../types/api'
 
 const route = useRoute()
@@ -182,8 +201,20 @@ const statusFilter = ref('')
 const labelSelector = ref('')
 const resources = ref<WorkloadItem[]>([])
 const detail = ref<ResourceDetailResponse | null>(null)
+const detailLogs = ref<{
+  loaded: boolean
+  loading: boolean
+  error: string
+  lines: string[]
+}>({
+  loaded: false,
+  loading: false,
+  error: '',
+  lines: [],
+})
 const scaleReplicas = ref(1)
 let detailRequestSeq = 0
+let logsRequestSeq = 0
 
 const operationModal = ref<{
   visible: boolean
@@ -220,8 +251,23 @@ async function loadResources() {
       )
     )
   ) {
-    detail.value = null
+    closeDetailPanel()
   }
+}
+
+function resetDetailLogs() {
+  logsRequestSeq += 1
+  detailLogs.value = {
+    loaded: false,
+    loading: false,
+    error: '',
+    lines: [],
+  }
+}
+
+function closeDetailPanel() {
+  detail.value = null
+  resetDetailLogs()
 }
 
 async function syncKindFromRoute(nextKindRaw: unknown) {
@@ -300,6 +346,7 @@ async function submitOperation() {
 }
 
 async function openDetail(name: string, targetNamespace: string) {
+  resetDetailLogs()
   const requestSeq = ++detailRequestSeq
   const requestedKind = kind.value
   const requestedName = name
@@ -309,7 +356,6 @@ async function openDetail(name: string, targetNamespace: string) {
     kind: kind.value,
     name,
     namespace: targetNamespace,
-    log_lines: 120,
     range_minutes: 10,
     step_seconds: 30,
     cluster_id: clusterId.value || undefined,
@@ -327,6 +373,104 @@ async function openDetail(name: string, targetNamespace: string) {
 
   detail.value = response
 }
+
+async function loadDetailLogs() {
+  if (!detail.value || detailLogs.value.loading) return
+
+  const activeDetail = detail.value
+  const requestSeq = ++logsRequestSeq
+  detailLogs.value.loading = true
+  detailLogs.value.error = ''
+
+  try {
+    const response = await getResourceLogs({
+      kind: activeDetail.item.kind,
+      name: activeDetail.item.name,
+      namespace: activeDetail.item.namespace,
+      log_lines: 180,
+      cluster_id: clusterId.value || undefined,
+    })
+
+    if (
+      requestSeq !== logsRequestSeq ||
+      !detail.value ||
+      detail.value.item.kind !== activeDetail.item.kind ||
+      detail.value.item.name !== activeDetail.item.name ||
+      detail.value.item.namespace !== activeDetail.item.namespace
+    ) {
+      return
+    }
+
+    detailLogs.value.lines = response.logs
+    detailLogs.value.loaded = true
+  } catch (error) {
+    if (requestSeq !== logsRequestSeq) {
+      return
+    }
+    detailLogs.value.error = 'Load logs failed. Please retry.'
+  } finally {
+    if (requestSeq === logsRequestSeq) {
+      detailLogs.value.loading = false
+    }
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Object.prototype.toString.call(value) === '[object Object]'
+}
+
+function yamlScalar(value: unknown): string {
+  if (value === null || value === undefined) return 'null'
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : `"${String(value)}"`
+  const text = String(value)
+  if (!text) return '""'
+  if (/^[A-Za-z0-9._/-]+$/.test(text)) return text
+  return JSON.stringify(text)
+}
+
+function yamlLines(value: unknown, indent: number): string[] {
+  const pad = ' '.repeat(indent)
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return [`${pad}[]`]
+
+    const lines: string[] = []
+    for (const item of value) {
+      if (Array.isArray(item) || isPlainObject(item)) {
+        lines.push(`${pad}-`)
+        lines.push(...yamlLines(item, indent + 2))
+      } else {
+        lines.push(`${pad}- ${yamlScalar(item)}`)
+      }
+    }
+    return lines
+  }
+
+  if (isPlainObject(value)) {
+    const entries = Object.entries(value)
+    if (entries.length === 0) return [`${pad}{}`]
+
+    const lines: string[] = []
+    for (const [key, item] of entries) {
+      if (Array.isArray(item) || isPlainObject(item)) {
+        lines.push(`${pad}${key}:`)
+        lines.push(...yamlLines(item, indent + 2))
+      } else {
+        lines.push(`${pad}${key}: ${yamlScalar(item)}`)
+      }
+    }
+    return lines
+  }
+
+  return [`${pad}${yamlScalar(value)}`]
+}
+
+const detailManifestYaml = computed(() => {
+  if (!detail.value) return ''
+  const manifest = detail.value.manifest || {}
+  return yamlLines(manifest, 0).join('\n')
+})
 
 function axisFromPoints(points: { ts: number; value: number }[]): string[] {
   return points.map((point) => {
@@ -389,7 +533,7 @@ watch(
   () => route.query.kind,
   async (nextKind) => {
     detailRequestSeq += 1
-    detail.value = null
+    closeDetailPanel()
     await syncKindFromRoute(nextKind)
     await loadResources()
   },

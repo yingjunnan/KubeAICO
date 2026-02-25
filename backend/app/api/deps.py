@@ -84,7 +84,12 @@ def get_audit_service() -> AuditService:
 
 @lru_cache
 def get_cluster_service() -> ClusterService:
-    return ClusterService(get_cluster_repository())
+    return ClusterService(
+        repo=get_cluster_repository(),
+        k8s_collector=get_k8s_collector(),
+        prometheus_collector=get_prometheus_collector(),
+        settings=get_settings(),
+    )
 
 
 @lru_cache

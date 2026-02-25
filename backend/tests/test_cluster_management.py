@@ -24,6 +24,18 @@ def test_cluster_crud_flow() -> None:
         token = _login(client)
         headers = {"Authorization": f"Bearer {token}"}
 
+        draft_test_resp = client.post(
+            "/api/v1/clusters/test",
+            json={
+                "k8s_api_url": "https://k8s.example.com:6443",
+                "prometheus_url": "http://prometheus:9090",
+                "k8s_bearer_token": "secret-token-value",
+            },
+            headers=headers,
+        )
+        assert draft_test_resp.status_code == 200
+        assert draft_test_resp.json()["ok"] is True
+
         create_resp = client.post(
             "/api/v1/clusters",
             json={
@@ -41,6 +53,10 @@ def test_cluster_crud_flow() -> None:
         created = create_resp.json()
         assert created["k8s_bearer_token_masked"] is not None
         cluster_pk = created["id"]
+
+        saved_test_resp = client.post(f"/api/v1/clusters/{cluster_pk}/test", headers=headers)
+        assert saved_test_resp.status_code == 200
+        assert saved_test_resp.json()["ok"] is True
 
         duplicate_name_resp = client.post(
             "/api/v1/clusters",

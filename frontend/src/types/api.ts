@@ -105,9 +105,16 @@ export interface ResourceMetricsPanel {
 
 export interface ResourceDetailResponse {
   item: WorkloadItem
+  manifest: Record<string, unknown>
   events: ResourceEvent[]
-  logs: string[]
   metrics?: ResourceMetricsPanel
+}
+
+export interface ResourceLogsResponse {
+  kind: ResourceKind
+  name: string
+  namespace: string
+  logs: string[]
 }
 
 export interface AlertItem {
@@ -161,6 +168,19 @@ export interface ManagedCluster {
 export interface ManagedClusterListResponse {
   total: number
   items: ManagedCluster[]
+}
+
+export interface ClusterConnectionTestComponent {
+  ok: boolean
+  message: string
+}
+
+export interface ClusterConnectionTestResponse {
+  ok: boolean
+  mode: string
+  kubernetes: ClusterConnectionTestComponent
+  prometheus: ClusterConnectionTestComponent
+  checked_at: string
 }
 
 export interface AIAnalyzeTaskResponse {

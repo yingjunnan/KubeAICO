@@ -5,11 +5,13 @@ import type {
   AuditLogListResponse,
   AlertListResponse,
   ClusterSummary,
+  ClusterConnectionTestResponse,
   LoginResponse,
   ManagedCluster,
   ManagedClusterListResponse,
   ResourceDetailResponse,
   ResourceKind,
+  ResourceLogsResponse,
   TimeseriesResponse,
   UserRead,
   WorkloadListResponse,
@@ -104,13 +106,24 @@ export async function getResourceDetail(params: {
   kind: ResourceKind
   name: string
   namespace: string
-  log_lines?: number
   range_minutes?: number
   step_seconds?: number
   cluster_id?: string
 }): Promise<ResourceDetailResponse> {
   const { kind, name, ...query } = params
   const { data } = await api.get<ResourceDetailResponse>(`/resources/${kind}/${name}/detail`, { params: query })
+  return data
+}
+
+export async function getResourceLogs(params: {
+  kind: ResourceKind
+  name: string
+  namespace: string
+  log_lines?: number
+  cluster_id?: string
+}): Promise<ResourceLogsResponse> {
+  const { kind, name, ...query } = params
+  const { data } = await api.get<ResourceLogsResponse>(`/resources/${kind}/${name}/logs`, { params: query })
   return data
 }
 
@@ -192,6 +205,20 @@ export async function updateCluster(params: {
 
 export async function deleteCluster(clusterPk: number): Promise<void> {
   await api.delete(`/clusters/${clusterPk}`)
+}
+
+export async function testClusterConnectionDraft(payload: {
+  k8s_api_url: string
+  prometheus_url?: string
+  k8s_bearer_token?: string
+}): Promise<ClusterConnectionTestResponse> {
+  const { data } = await api.post<ClusterConnectionTestResponse>('/clusters/test', payload)
+  return data
+}
+
+export async function testClusterConnection(clusterPk: number): Promise<ClusterConnectionTestResponse> {
+  const { data } = await api.post<ClusterConnectionTestResponse>(`/clusters/${clusterPk}/test`)
+  return data
 }
 
 export async function createAnalyzeTask(payload: Record<string, unknown>): Promise<AIAnalyzeTaskResponse> {

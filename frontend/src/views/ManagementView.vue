@@ -40,11 +40,15 @@
             <td>
               <div class="action-row">
                 <button type="button" @click="openEdit(cluster.id)">Edit</button>
+                <button type="button" :disabled="savedTestingId === cluster.id" @click="testSavedConnection(cluster.id)">
+                  {{ savedTestingId === cluster.id ? 'Testing...' : 'Detect' }}
+                </button>
                 <button type="button" @click="toggleStatus(cluster.id)">
                   {{ getCluster(cluster.id)?.is_active ? 'Disable' : 'Enable' }}
                 </button>
                 <button type="button" @click="openDelete(cluster.id)">Delete</button>
               </div>
+              <p v-if="savedTestMessages[cluster.id]" class="hint">{{ savedTestMessages[cluster.id] }}</p>
             </td>
           </tr>
           <tr v-if="clusters.length === 0">
@@ -91,11 +95,17 @@
               <input v-model="form.is_active" type="checkbox" />
               <span>Enable this cluster</span>
             </label>
+            <p v-if="draftTestMessage" :class="draftTestPassedSignature ? 'hint' : 'error-text'">
+              {{ draftTestMessage }}
+            </p>
             <p v-if="formError" class="error-text">{{ formError }}</p>
           </div>
 
           <footer class="theme-modal-actions">
             <button type="button" :disabled="submitting" @click="closeForm">Cancel</button>
+            <button type="button" :disabled="submitting || draftTesting" @click="testDraftConnection">
+              {{ draftTesting ? 'Testing...' : 'Test Connection' }}
+            </button>
             <button class="primary-btn" type="button" :disabled="submitting" @click="submitForm">
               {{ submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Create Cluster' }}
             </button>
@@ -140,15 +150,22 @@ import {
   createCluster,
   deleteCluster,
   getClusters,
+  testClusterConnection,
+  testClusterConnectionDraft,
   updateCluster,
 } from '../services/api'
-import type { ManagedCluster } from '../types/api'
+import type { ClusterConnectionTestResponse, ManagedCluster } from '../types/api'
 
 const clusters = ref<ManagedCluster[]>([])
 const formVisible = ref(false)
 const editingId = ref<number | null>(null)
 const submitting = ref(false)
 const formError = ref('')
+const draftTesting = ref(false)
+const draftTestMessage = ref('')
+const draftTestPassedSignature = ref('')
+const savedTestingId = ref<number | null>(null)
+const savedTestMessages = ref<Record<number, string>>({})
 const deleteModal = ref<{
   visible: boolean
   target: ManagedCluster | null
@@ -187,6 +204,9 @@ function resetForm() {
   form.is_active = true
   form.description = ''
   formError.value = ''
+  draftTesting.value = false
+  draftTestMessage.value = ''
+  draftTestPassedSignature.value = ''
 }
 
 function closeForm() {
@@ -214,6 +234,9 @@ function openEdit(id: number) {
   form.is_active = row.is_active
   form.description = row.description || ''
   formError.value = ''
+  draftTesting.value = false
+  draftTestMessage.value = ''
+  draftTestPassedSignature.value = ''
   formVisible.value = true
 }
 
@@ -226,6 +249,14 @@ async function submitForm() {
   if (!form.name.trim() || !form.cluster_id.trim() || !form.k8s_api_url.trim()) {
     formError.value = 'Name, Cluster ID, and K8s API URL are required.'
     return
+  }
+
+  if (!editingId.value) {
+    const signature = getDraftSignature()
+    if (!draftTestPassedSignature.value || draftTestPassedSignature.value !== signature) {
+      formError.value = 'Please run Test Connection successfully before creating a new cluster.'
+      return
+    }
   }
 
   submitting.value = true
@@ -260,6 +291,62 @@ async function toggleStatus(id: number) {
   if (!row) return
   await updateCluster({ cluster_pk: id, payload: { is_active: !row.is_active } })
   await loadClusters()
+}
+
+function getDraftPayload() {
+  return {
+    k8s_api_url: form.k8s_api_url.trim(),
+    prometheus_url: form.prometheus_url.trim() || undefined,
+    k8s_bearer_token: form.k8s_bearer_token.trim() || undefined,
+  }
+}
+
+function getDraftSignature() {
+  return JSON.stringify(getDraftPayload())
+}
+
+function formatTestMessage(result: ClusterConnectionTestResponse) {
+  const state = result.ok ? 'PASS' : 'FAIL'
+  return `${state} [${result.mode}] K8s: ${result.kubernetes.message} | Prometheus: ${result.prometheus.message}`
+}
+
+async function testDraftConnection() {
+  formError.value = ''
+  if (!form.k8s_api_url.trim()) {
+    formError.value = 'K8s API URL is required before test.'
+    return
+  }
+
+  draftTesting.value = true
+  const signature = getDraftSignature()
+  try {
+    const result = await testClusterConnectionDraft(getDraftPayload())
+    draftTestMessage.value = formatTestMessage(result)
+    draftTestPassedSignature.value = result.ok ? signature : ''
+  } catch (error: any) {
+    draftTestPassedSignature.value = ''
+    draftTestMessage.value = error?.response?.data?.detail || 'Connection test failed.'
+  } finally {
+    draftTesting.value = false
+  }
+}
+
+async function testSavedConnection(id: number) {
+  savedTestingId.value = id
+  try {
+    const result = await testClusterConnection(id)
+    savedTestMessages.value = {
+      ...savedTestMessages.value,
+      [id]: formatTestMessage(result),
+    }
+  } catch (error: any) {
+    savedTestMessages.value = {
+      ...savedTestMessages.value,
+      [id]: error?.response?.data?.detail || 'Connection test failed.',
+    }
+  } finally {
+    savedTestingId.value = null
+  }
 }
 
 function openDelete(id: number) {

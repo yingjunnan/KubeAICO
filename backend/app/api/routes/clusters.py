@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_cluster_service, get_current_user
 from app.db.session import get_db
 from app.schemas.cluster import (
+    ClusterConnectionTestRequest,
+    ClusterConnectionTestResponse,
     ManagedClusterCreate,
     ManagedClusterListResponse,
     ManagedClusterRead,
@@ -33,6 +35,28 @@ async def create_cluster(
         return await service.create_cluster(db, payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/test", response_model=ClusterConnectionTestResponse)
+async def test_cluster_draft(
+    payload: ClusterConnectionTestRequest,
+    _user=Depends(get_current_user),
+    service=Depends(get_cluster_service),
+) -> ClusterConnectionTestResponse:
+    return await service.test_connection_payload(payload)
+
+
+@router.post("/{cluster_pk}/test", response_model=ClusterConnectionTestResponse)
+async def test_cluster_saved(
+    cluster_pk: int,
+    _user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    service=Depends(get_cluster_service),
+) -> ClusterConnectionTestResponse:
+    try:
+        return await service.test_cluster_connection(db=db, cluster_pk=cluster_pk)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.put("/{cluster_pk}", response_model=ManagedClusterRead)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.collector.kubernetes import KubernetesCollector
@@ -12,6 +13,8 @@ from app.repository.audit import AuditRepository
 from app.schemas.resource import (
     ResourceDetailResponse,
     ResourceEvent,
+    ResourceKind,
+    ResourceLogsResponse,
     ResourceMetricPoint,
     ResourceMetricSeries,
     ResourceMetricsPanel,
@@ -61,7 +64,6 @@ class ResourceService:
         kind: str,
         name: str,
         namespace: str,
-        log_lines: int = 120,
         range_minutes: int = 10,
         step_seconds: int = 30,
         cluster: ManagedCluster | None = None,
@@ -90,14 +92,6 @@ class ResourceService:
             for event in events_raw
         ]
 
-        logs = await self.k8s_collector.get_resource_logs(
-            kind=kind,
-            name=name,
-            namespace=namespace,
-            tail_lines=log_lines,
-            cluster=cluster,
-        )
-
         metrics = await self._build_detail_metrics(
             kind=kind,
             name=name,
@@ -108,7 +102,39 @@ class ResourceService:
             cluster=cluster,
         )
 
-        return ResourceDetailResponse(item=workload, events=events, logs=logs, metrics=metrics)
+        return ResourceDetailResponse(
+            item=workload,
+            manifest=resource,
+            events=events,
+            metrics=metrics,
+        )
+
+    async def get_resource_logs(
+        self,
+        *,
+        kind: ResourceKind,
+        name: str,
+        namespace: str,
+        log_lines: int = 120,
+        cluster: ManagedCluster | None = None,
+    ) -> ResourceLogsResponse:
+        try:
+            logs = await self.k8s_collector.get_resource_logs(
+                kind=kind,
+                name=name,
+                namespace=namespace,
+                tail_lines=log_lines,
+                cluster=cluster,
+            )
+        except Exception as exc:  # noqa: BLE001 - logs failure should not break detail page
+            logs = [f"Unable to load logs: {self._summarize_exception(exc)}."]
+
+        return ResourceLogsResponse(
+            kind=kind,
+            name=name,
+            namespace=namespace,
+            logs=logs,
+        )
 
     async def scale_workload(
         self,
@@ -217,6 +243,14 @@ class ResourceService:
             or event.get("firstTimestamp")
             or ""
         )
+
+    @staticmethod
+    def _summarize_exception(exc: Exception) -> str:
+        if isinstance(exc, httpx.HTTPStatusError):
+            return f"HTTP {exc.response.status_code}"
+        if isinstance(exc, httpx.RequestError):
+            return exc.__class__.__name__
+        return str(exc) or exc.__class__.__name__
 
     async def _build_detail_metrics(
         self,

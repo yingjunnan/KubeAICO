@@ -43,3 +43,22 @@ class ManagedClusterRead(BaseModel):
 class ManagedClusterListResponse(BaseModel):
     total: int
     items: list[ManagedClusterRead]
+
+
+class ClusterConnectionTestRequest(BaseModel):
+    k8s_api_url: str = Field(min_length=1, max_length=300)
+    prometheus_url: str | None = Field(default=None, max_length=300)
+    k8s_bearer_token: str | None = Field(default=None, max_length=4096)
+
+
+class ClusterConnectionTestComponent(BaseModel):
+    ok: bool
+    message: str
+
+
+class ClusterConnectionTestResponse(BaseModel):
+    ok: bool
+    mode: str
+    kubernetes: ClusterConnectionTestComponent
+    prometheus: ClusterConnectionTestComponent
+    checked_at: datetime

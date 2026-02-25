@@ -1,8 +1,9 @@
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,7 +17,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
 
     database_url: str = "sqlite+aiosqlite:///./kubeaico.db"
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
 
     use_mock_data: bool = True
 
@@ -37,10 +40,26 @@ class Settings(BaseSettings):
 
     @field_validator("cors_origins", mode="before")
     @classmethod
-    def validate_cors_origins(cls, value: str | list[str]) -> list[str]:
+    def validate_cors_origins(cls, value: str | list[str] | None) -> list[str]:
+        if value is None:
+            return []
+
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+            raw = value.strip()
+            if not raw:
+                return []
+
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+
+            return [item.strip() for item in raw.split(",") if item.strip()]
+
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
 
 
 @lru_cache

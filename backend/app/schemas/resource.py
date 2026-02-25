@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -74,6 +74,13 @@ class ResourceMetricsPanel(BaseModel):
 
 class ResourceDetailResponse(BaseModel):
     item: WorkloadItem
+    manifest: dict[str, Any] = Field(default_factory=dict)
     events: list[ResourceEvent] = Field(default_factory=list)
-    logs: list[str] = Field(default_factory=list)
     metrics: ResourceMetricsPanel | None = None
+
+
+class ResourceLogsResponse(BaseModel):
+    kind: ResourceKind
+    name: str
+    namespace: str
+    logs: list[str] = Field(default_factory=list)

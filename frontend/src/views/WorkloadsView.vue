@@ -177,6 +177,7 @@ const scalableKinds = new Set<ResourceKind>(['deployment', 'statefulset', 'daemo
 
 const kind = ref<ResourceKind>('deployment')
 const namespace = ref('')
+const clusterId = ref('')
 const statusFilter = ref('')
 const labelSelector = ref('')
 const resources = ref<WorkloadItem[]>([])
@@ -204,6 +205,7 @@ async function loadResources() {
     namespace: namespace.value || undefined,
     status: statusFilter.value || undefined,
     label_selector: labelSelector.value || undefined,
+    cluster_id: clusterId.value || undefined,
   })
   resources.value = response.items
 
@@ -277,12 +279,14 @@ async function submitOperation() {
         name: target.name,
         namespace: target.namespace,
         replicas: scaleReplicas.value,
+        cluster_id: clusterId.value || undefined,
       })
     } else {
       await rolloutRestart({
         kind: kind.value,
         name: target.name,
         namespace: target.namespace,
+        cluster_id: clusterId.value || undefined,
       })
     }
 
@@ -308,6 +312,7 @@ async function openDetail(name: string, targetNamespace: string) {
     log_lines: 120,
     range_minutes: 10,
     step_seconds: 30,
+    cluster_id: clusterId.value || undefined,
   })
 
   if (
@@ -369,8 +374,9 @@ function chartColor(index: number): string {
   return palette[index % palette.length]
 }
 
-async function onFilters(payload: { range: number; namespace?: string; env: string }) {
+async function onFilters(payload: { range: number; namespace?: string; cluster_id?: string; env?: string }) {
   namespace.value = payload.namespace || ''
+  clusterId.value = payload.cluster_id || ''
   await loadResources()
 }
 

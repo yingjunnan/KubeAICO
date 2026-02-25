@@ -4,6 +4,7 @@ import AlertsView from '../views/AlertsView.vue'
 import AuditView from '../views/AuditView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import LoginView from '../views/LoginView.vue'
+import ManagementView from '../views/ManagementView.vue'
 import WorkloadsView from '../views/WorkloadsView.vue'
 
 const router = createRouter({
@@ -12,6 +13,7 @@ const router = createRouter({
     { path: '/login', name: 'login', component: LoginView },
     { path: '/', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
     { path: '/workloads', name: 'workloads', component: WorkloadsView, meta: { requiresAuth: true } },
+    { path: '/management', name: 'management', component: ManagementView, meta: { requiresAuth: true } },
     { path: '/alerts', name: 'alerts', component: AlertsView, meta: { requiresAuth: true } },
     { path: '/audit', name: 'audit', component: AuditView, meta: { requiresAuth: true } },
     { path: '/ai', name: 'ai', component: AIView, meta: { requiresAuth: true } },

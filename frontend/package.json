@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "clean:generated": "find src -type f -name '*.js' -delete && find src -type f -name '*.js.map' -delete && rm -f tsconfig.tsbuildinfo",
+    "typecheck": "vue-tsc --noEmit",
+    "dev": "npm run clean:generated && vite",
+    "build": "npm run clean:generated && npm run typecheck && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

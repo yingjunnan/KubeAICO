@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from app.collector.kubernetes import KubernetesCollector
 from app.collector.prometheus import PrometheusCollector
 from app.schemas.alerts import AlertItem, AlertListResponse, AlertSeverity
+
+if TYPE_CHECKING:
+    from app.db.models import ManagedCluster
 
 
 class AlertService:
@@ -14,9 +20,14 @@ class AlertService:
         self.k8s_collector = k8s_collector
         self.prometheus_collector = prometheus_collector
 
-    async def get_alerts(self, namespace: str | None = None, limit: int = 50) -> AlertListResponse:
-        events = await self.k8s_collector.list_events(namespace=namespace)
-        prom_alerts = await self.prometheus_collector.get_firing_alerts()
+    async def get_alerts(
+        self,
+        namespace: str | None = None,
+        limit: int = 50,
+        cluster: ManagedCluster | None = None,
+    ) -> AlertListResponse:
+        events = await self.k8s_collector.list_events(namespace=namespace, cluster=cluster)
+        prom_alerts = await self.prometheus_collector.get_firing_alerts(cluster=cluster)
 
         items: list[AlertItem] = []
 

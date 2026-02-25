@@ -26,14 +26,20 @@ import type { AlertItem } from '../types/api'
 
 const alerts = ref<AlertItem[]>([])
 const namespace = ref('')
+const clusterId = ref('')
 
 async function loadAlerts() {
-  const response = await getAlerts({ namespace: namespace.value || undefined, limit: 50 })
+  const response = await getAlerts({
+    namespace: namespace.value || undefined,
+    limit: 50,
+    cluster_id: clusterId.value || undefined,
+  })
   alerts.value = response.items
 }
 
-function onFilters(payload: { range: number; namespace?: string; env: string }) {
+function onFilters(payload: { range: number; namespace?: string; cluster_id?: string; env?: string }) {
   namespace.value = payload.namespace || ''
+  clusterId.value = payload.cluster_id || ''
   void loadAlerts()
 }
 

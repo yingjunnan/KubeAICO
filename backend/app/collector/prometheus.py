@@ -3,11 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from app.core.config import Settings
+
+if TYPE_CHECKING:
+    from app.db.models import ManagedCluster
 
 
 @dataclass
@@ -35,13 +38,18 @@ class PrometheusCollector:
             await self._client.aclose()
             self._client = None
 
-    async def query_instant(self, promql: str) -> list[dict[str, Any]]:
-        if self.settings.use_mock_data or not self.settings.prometheus_url:
+    async def query_instant(
+        self,
+        promql: str,
+        cluster: ManagedCluster | None = None,
+    ) -> list[dict[str, Any]]:
+        prometheus_url = self._resolve_prometheus_url(cluster)
+        if self._should_use_mock(prometheus_url):
             return []
 
         client = await self._get_client()
         resp = await client.get(
-            f"{self.settings.prometheus_url.rstrip('/')}/api/v1/query",
+            f"{prometheus_url.rstrip('/')}/api/v1/query",
             params={"query": promql},
         )
         resp.raise_for_status()
@@ -56,13 +64,15 @@ class PrometheusCollector:
         start: datetime,
         end: datetime,
         step_seconds: int,
+        cluster: ManagedCluster | None = None,
     ) -> list[dict[str, Any]]:
-        if self.settings.use_mock_data or not self.settings.prometheus_url:
+        prometheus_url = self._resolve_prometheus_url(cluster)
+        if self._should_use_mock(prometheus_url):
             return []
 
         client = await self._get_client()
         resp = await client.get(
-            f"{self.settings.prometheus_url.rstrip('/')}/api/v1/query_range",
+            f"{prometheus_url.rstrip('/')}/api/v1/query_range",
             params={
                 "query": promql,
                 "start": int(start.timestamp()),
@@ -76,8 +86,9 @@ class PrometheusCollector:
             return []
         return payload.get("data", {}).get("result", [])
 
-    async def get_cluster_usage(self) -> dict[str, float]:
-        if self.settings.use_mock_data or not self.settings.prometheus_url:
+    async def get_cluster_usage(self, cluster: ManagedCluster | None = None) -> dict[str, float]:
+        prometheus_url = self._resolve_prometheus_url(cluster)
+        if self._should_use_mock(prometheus_url):
             return {
                 "cpu_usage_cores": 8.2,
                 "cpu_capacity_cores": 16.0,
@@ -86,13 +97,15 @@ class PrometheusCollector:
             }
 
         cpu_usage_res = await self.query_instant(
-            'sum(rate(container_cpu_usage_seconds_total{container!=""}[5m]))'
+            'sum(rate(container_cpu_usage_seconds_total{container!=""}[5m]))',
+            cluster=cluster,
         )
-        cpu_capacity_res = await self.query_instant("sum(machine_cpu_cores)")
+        cpu_capacity_res = await self.query_instant("sum(machine_cpu_cores)", cluster=cluster)
         mem_usage_res = await self.query_instant(
-            'sum(container_memory_working_set_bytes{container!=""})'
+            'sum(container_memory_working_set_bytes{container!=""})',
+            cluster=cluster,
         )
-        mem_capacity_res = await self.query_instant("sum(machine_memory_bytes)")
+        mem_capacity_res = await self.query_instant("sum(machine_memory_bytes)", cluster=cluster)
 
         return {
             "cpu_usage_cores": self._extract_scalar(cpu_usage_res),
@@ -101,8 +114,13 @@ class PrometheusCollector:
             "memory_capacity_bytes": self._extract_scalar(mem_capacity_res),
         }
 
-    async def get_namespace_usage(self, limit: int = 5) -> list[NamespaceUsageData]:
-        if self.settings.use_mock_data or not self.settings.prometheus_url:
+    async def get_namespace_usage(
+        self,
+        limit: int = 5,
+        cluster: ManagedCluster | None = None,
+    ) -> list[NamespaceUsageData]:
+        prometheus_url = self._resolve_prometheus_url(cluster)
+        if self._should_use_mock(prometheus_url):
             return [
                 NamespaceUsageData("default", 2100, 5.3 * 1024**3, 28),
                 NamespaceUsageData("kube-system", 1200, 3.8 * 1024**3, 22),
@@ -112,12 +130,17 @@ class PrometheusCollector:
             ][:limit]
 
         cpu_result = await self.query_instant(
-            f'topk({limit}, sum(rate(container_cpu_usage_seconds_total{{container!=""}}[5m])) by (namespace))'
+            f'topk({limit}, sum(rate(container_cpu_usage_seconds_total{{container!=""}}[5m])) by (namespace))',
+            cluster=cluster,
         )
         mem_result = await self.query_instant(
-            f'topk({limit}, sum(container_memory_working_set_bytes{{container!=""}}) by (namespace))'
+            f'topk({limit}, sum(container_memory_working_set_bytes{{container!=""}}) by (namespace))',
+            cluster=cluster,
         )
-        pod_result = await self.query_instant(f"topk({limit}, count(kube_pod_info) by (namespace))")
+        pod_result = await self.query_instant(
+            f"topk({limit}, count(kube_pod_info) by (namespace))",
+            cluster=cluster,
+        )
 
         cpu_map = self._extract_vector_by_namespace(cpu_result, multiply=1000)
         mem_map = self._extract_vector_by_namespace(mem_result)
@@ -136,8 +159,9 @@ class PrometheusCollector:
         output.sort(key=lambda item: item.memory_bytes, reverse=True)
         return output[:limit]
 
-    async def get_firing_alerts(self) -> list[dict[str, str]]:
-        if self.settings.use_mock_data or not self.settings.prometheus_url:
+    async def get_firing_alerts(self, cluster: ManagedCluster | None = None) -> list[dict[str, str]]:
+        prometheus_url = self._resolve_prometheus_url(cluster)
+        if self._should_use_mock(prometheus_url):
             return [
                 {
                     "name": "NodeMemoryPressure",
@@ -147,7 +171,7 @@ class PrometheusCollector:
                 }
             ]
 
-        alert_result = await self.query_instant('ALERTS{alertstate="firing"}')
+        alert_result = await self.query_instant('ALERTS{alertstate="firing"}', cluster=cluster)
         firing: list[dict[str, str]] = []
         for item in alert_result:
             metric = item.get("metric", {})
@@ -168,15 +192,31 @@ class PrometheusCollector:
         namespace: str | None,
         workload: str | None,
         step_seconds: int,
+        cluster: ManagedCluster | None = None,
     ) -> list[dict[str, Any]]:
-        if self.settings.use_mock_data or not self.settings.prometheus_url:
+        prometheus_url = self._resolve_prometheus_url(cluster)
+        if self._should_use_mock(prometheus_url):
             return self._mock_timeseries(metric=metric, range_minutes=range_minutes, step_seconds=step_seconds)
 
         end = datetime.now(UTC)
         start = end - timedelta(minutes=range_minutes)
 
         promql = self._to_promql(metric=metric, namespace=namespace, workload=workload)
-        return await self.query_range(promql=promql, start=start, end=end, step_seconds=step_seconds)
+        return await self.query_range(
+            promql=promql,
+            start=start,
+            end=end,
+            step_seconds=step_seconds,
+            cluster=cluster,
+        )
+
+    def _resolve_prometheus_url(self, cluster: ManagedCluster | None) -> str | None:
+        if cluster and cluster.prometheus_url:
+            return cluster.prometheus_url
+        return self.settings.prometheus_url
+
+    def _should_use_mock(self, prometheus_url: str | None) -> bool:
+        return self.settings.use_mock_data or not prometheus_url
 
     def _to_promql(self, metric: str, namespace: str | None, workload: str | None) -> str:
         selector_parts: list[str] = ['container!=""']

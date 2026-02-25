@@ -158,6 +158,23 @@
         <span>Alerts</span>
       </RouterLink>
 
+      <RouterLink to="/management" class="nav-item" :class="{ 'is-active': route.path === '/management' }">
+        <span class="nav-icon-wrap" aria-hidden="true">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
+            <path
+              v-for="(path, idx) in iconPaths.management"
+              :key="`management-${idx}`"
+              :d="path"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <span>Management</span>
+      </RouterLink>
+
       <RouterLink to="/audit" class="nav-item" :class="{ 'is-active': route.path === '/audit' }">
         <span class="nav-icon-wrap" aria-hidden="true">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none">
@@ -212,6 +229,7 @@ const iconPaths = {
   service: ['M12 3v6', 'M8 9h8', 'M6 9v6', 'M18 9v6', 'M6 15h12', 'M12 15v6'],
   ingress: ['M4 8h16', 'M7 8V5h10v3', 'M12 8v11', 'M9 16l3 3 3-3'],
   alerts: ['M18 8a6 6 0 1 0-12 0c0 7-3 6-3 8h18c0-2-3-1-3-8', 'M10 20a2 2 0 0 0 4 0'],
+  management: ['M12 2v4', 'M12 18v4', 'M4.9 4.9l2.8 2.8', 'M16.3 16.3l2.8 2.8', 'M2 12h4', 'M18 12h4', 'M4.9 19.1l2.8-2.8', 'M16.3 7.7l2.8-2.8', 'M12 16a4 4 0 1 0 0.01 0'],
   audit: ['M9 4h6', 'M8 7h8', 'M7 4H6a1 1 0 0 0-1 1v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5a1 1 0 0 0-1-1h-1', 'M9 14l2 2 4-4'],
   ai: [
     'M12 3l1.6 3.7L17 8.3l-3.4 1.6L12 13.6l-1.6-3.7L7 8.3l3.4-1.6L12 3z',

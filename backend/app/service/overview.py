@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from app.collector.kubernetes import KubernetesCollector
 from app.collector.prometheus import PrometheusCollector
 from app.schemas.overview import ClusterSummary, NamespaceUsage
 from app.service.alerts import AlertService
+
+if TYPE_CHECKING:
+    from app.db.models import ManagedCluster
 
 
 class OverviewService:
@@ -17,12 +23,12 @@ class OverviewService:
         self.prometheus_collector = prometheus_collector
         self.alert_service = alert_service
 
-    async def get_cluster_summary(self) -> ClusterSummary:
-        nodes = await self.k8s_collector.list_nodes()
-        pods = await self.k8s_collector.list_pods()
-        alerts = await self.alert_service.get_alerts(limit=100)
-        usage = await self.prometheus_collector.get_cluster_usage()
-        top_ns = await self.prometheus_collector.get_namespace_usage(limit=5)
+    async def get_cluster_summary(self, cluster: ManagedCluster | None = None) -> ClusterSummary:
+        nodes = await self.k8s_collector.list_nodes(cluster=cluster)
+        pods = await self.k8s_collector.list_pods(cluster=cluster)
+        alerts = await self.alert_service.get_alerts(limit=100, cluster=cluster)
+        usage = await self.prometheus_collector.get_cluster_usage(cluster=cluster)
+        top_ns = await self.prometheus_collector.get_namespace_usage(limit=5, cluster=cluster)
 
         nodes_total = len(nodes)
         nodes_ready = sum(1 for node in nodes if self._is_node_ready(node))
@@ -64,6 +70,7 @@ class OverviewService:
         )
 
         return ClusterSummary(
+            cluster_id=cluster.cluster_id if cluster else "cluster-local",
             generated_at=datetime.now(UTC),
             nodes_total=nodes_total,
             nodes_ready=nodes_ready,

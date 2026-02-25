@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +18,9 @@ from app.schemas.resource import (
     WorkloadItem,
     WorkloadListResponse,
 )
+
+if TYPE_CHECKING:
+    from app.db.models import ManagedCluster
 
 
 class ResourceService:
@@ -34,11 +40,13 @@ class ResourceService:
         namespace: str | None,
         label_selector: str | None,
         status: str | None,
+        cluster: ManagedCluster | None = None,
     ) -> WorkloadListResponse:
         items = await self.k8s_collector.list_resources(
             kind=kind,
             namespace=namespace,
             label_selector=label_selector,
+            cluster=cluster,
         )
         workloads = [self._to_workload_item(kind, item) for item in items]
 
@@ -56,14 +64,21 @@ class ResourceService:
         log_lines: int = 120,
         range_minutes: int = 10,
         step_seconds: int = 30,
+        cluster: ManagedCluster | None = None,
     ) -> ResourceDetailResponse:
-        resource = await self.k8s_collector.get_resource(kind=kind, name=name, namespace=namespace)
+        resource = await self.k8s_collector.get_resource(
+            kind=kind,
+            name=name,
+            namespace=namespace,
+            cluster=cluster,
+        )
         workload = self._to_workload_item(kind, resource)
 
         events_raw = await self.k8s_collector.get_related_events(
             kind=kind,
             name=name,
             namespace=namespace,
+            cluster=cluster,
         )
         events = [
             ResourceEvent(
@@ -80,6 +95,7 @@ class ResourceService:
             name=name,
             namespace=namespace,
             tail_lines=log_lines,
+            cluster=cluster,
         )
 
         metrics = await self._build_detail_metrics(
@@ -89,6 +105,7 @@ class ResourceService:
             workload=workload,
             range_minutes=range_minutes,
             step_seconds=step_seconds,
+            cluster=cluster,
         )
 
         return ResourceDetailResponse(item=workload, events=events, logs=logs, metrics=metrics)
@@ -102,6 +119,7 @@ class ResourceService:
         name: str,
         namespace: str,
         replicas: int,
+        cluster: ManagedCluster | None = None,
     ) -> int:
         if replicas > 1000:
             raise ValueError("Scale target is too high; max replicas is 1000 in current policy")
@@ -111,6 +129,7 @@ class ResourceService:
             name=name,
             namespace=namespace,
             replicas=replicas,
+            cluster=cluster,
         )
         log = await self.audit_repo.create(
             db,
@@ -132,8 +151,14 @@ class ResourceService:
         kind: str,
         name: str,
         namespace: str,
+        cluster: ManagedCluster | None = None,
     ) -> int:
-        await self.k8s_collector.rollout_restart(kind=kind, name=name, namespace=namespace)
+        await self.k8s_collector.rollout_restart(
+            kind=kind,
+            name=name,
+            namespace=namespace,
+            cluster=cluster,
+        )
         log = await self.audit_repo.create(
             db,
             user_id=user.id,
@@ -202,6 +227,7 @@ class ResourceService:
         workload: WorkloadItem,
         range_minutes: int,
         step_seconds: int,
+        cluster: ManagedCluster | None = None,
     ) -> ResourceMetricsPanel:
         profile = self._metric_profile(kind=kind)
         workload_filter = (
@@ -218,6 +244,7 @@ class ResourceService:
                 workload=workload_filter,
                 range_minutes=range_minutes,
                 step_seconds=step_seconds,
+                cluster=cluster,
             )
             series.append(
                 ResourceMetricSeries(
@@ -295,6 +322,7 @@ class ResourceService:
         workload: str | None,
         range_minutes: int,
         step_seconds: int,
+        cluster: ManagedCluster | None = None,
     ) -> list[ResourceMetricPoint]:
         raw_series = await self.prometheus_collector.get_timeseries(
             metric=metric_key,
@@ -302,6 +330,7 @@ class ResourceService:
             namespace=namespace,
             workload=workload,
             step_seconds=step_seconds,
+            cluster=cluster,
         )
 
         merged: dict[int, float] = {}

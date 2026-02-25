@@ -5,10 +5,12 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import (
+    get_cluster_repository,
     get_k8s_collector,
     get_overview_service,
     get_prometheus_collector,
     get_user_repository,
+    resolve_cluster_by_id,
 )
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -57,6 +59,7 @@ async def healthz() -> dict[str, str]:
 @app.websocket("/ws/overview")
 async def overview_ws(websocket: WebSocket) -> None:
     token = websocket.query_params.get("token")
+    cluster_id = websocket.query_params.get("cluster_id")
     if not token:
         await websocket.close(code=4401, reason="Missing token")
         return
@@ -67,11 +70,21 @@ async def overview_ws(websocket: WebSocket) -> None:
         await websocket.close(code=4401, reason="Invalid token")
         return
 
+    cluster = None
     async with AsyncSessionLocal() as db:
         user_repo = get_user_repository()
         user = await user_repo.get_by_username(db, username)
         if not user or not user.is_active:
             await websocket.close(code=4403, reason="User is not active")
+            return
+        try:
+            cluster = await resolve_cluster_by_id(
+                db=db,
+                cluster_id=cluster_id,
+                cluster_repo=get_cluster_repository(),
+            )
+        except ValueError as exc:
+            await websocket.close(code=4404, reason=str(exc))
             return
 
     await websocket.accept()
@@ -80,7 +93,7 @@ async def overview_ws(websocket: WebSocket) -> None:
 
     try:
         while True:
-            payload = await overview_service.get_cluster_summary()
+            payload = await overview_service.get_cluster_summary(cluster=cluster)
             await websocket.send_json(payload.model_dump(mode="json"))
             await asyncio.sleep(settings.overview_stream_interval_seconds)
     except WebSocketDisconnect:

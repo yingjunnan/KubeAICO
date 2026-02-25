@@ -145,6 +145,24 @@ export interface AuditLogListResponse {
   items: AuditLogItem[]
 }
 
+export interface ManagedCluster {
+  id: number
+  name: string
+  cluster_id: string
+  k8s_api_url: string
+  prometheus_url?: string
+  k8s_bearer_token_masked?: string
+  is_active: boolean
+  description?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ManagedClusterListResponse {
+  total: number
+  items: ManagedCluster[]
+}
+
 export interface AIAnalyzeTaskResponse {
   task_id: number
   status: string

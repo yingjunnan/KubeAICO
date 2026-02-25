@@ -60,6 +60,8 @@ import type { AIAnalyzeResult } from '../types/api'
 
 const namespace = ref('default')
 const workload = ref('')
+const clusterId = ref('')
+const env = ref('')
 const cpu = ref(65)
 const memory = ref(72)
 const restartRate = ref(0.02)
@@ -84,6 +86,7 @@ async function runAnalyze() {
 
   try {
     const task = await createAnalyzeTask({
+      cluster_id: clusterId.value || 'cluster-local',
       namespace: namespace.value || undefined,
       workload: workload.value || undefined,
       metrics: [
@@ -93,6 +96,7 @@ async function runAnalyze() {
         { name: 'error_rate', value: errorRate.value },
       ],
       events: [],
+      extra_context: env.value ? { env: env.value } : {},
     })
 
     taskStatus.value = task.status
@@ -117,7 +121,9 @@ async function runAnalyze() {
   }
 }
 
-function onFilters(payload: { range: number; namespace?: string; env: string }) {
+function onFilters(payload: { range: number; namespace?: string; cluster_id?: string; env?: string }) {
   namespace.value = payload.namespace || namespace.value
+  clusterId.value = payload.cluster_id || ''
+  env.value = payload.env || ''
 }
 </script>

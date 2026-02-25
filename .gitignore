@@ -9,6 +9,9 @@ __pycache__/
 node_modules/
 dist/
 *.tsbuildinfo
+frontend/src/**/*.js
+frontend/src/**/*.js.map
+frontend/tsconfig.tsbuildinfo
 
 # Environment
 .env

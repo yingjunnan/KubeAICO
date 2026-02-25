@@ -1,5 +1,12 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from app.collector.prometheus import PrometheusCollector
 from app.schemas.metrics import TimeseriesPoint, TimeseriesResponse, TimeseriesSeries
+
+if TYPE_CHECKING:
+    from app.db.models import ManagedCluster
 
 
 class MetricsService:
@@ -13,6 +20,7 @@ class MetricsService:
         namespace: str | None,
         workload: str | None,
         step_seconds: int,
+        cluster: ManagedCluster | None = None,
     ) -> TimeseriesResponse:
         raw_series = await self.prometheus_collector.get_timeseries(
             metric=metric,
@@ -20,6 +28,7 @@ class MetricsService:
             namespace=namespace,
             workload=workload,
             step_seconds=step_seconds,
+            cluster=cluster,
         )
 
         series: list[TimeseriesSeries] = []

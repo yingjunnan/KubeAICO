@@ -33,10 +33,12 @@ class WorkloadListResponse(BaseModel):
 class ScaleRequest(BaseModel):
     namespace: str
     replicas: int = Field(ge=0)
+    cluster_id: str | None = None
 
 
 class RestartRequest(BaseModel):
     namespace: str
+    cluster_id: str | None = None
 
 
 class ResourceActionResponse(BaseModel):

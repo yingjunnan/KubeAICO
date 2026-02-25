@@ -48,3 +48,22 @@ class AITask(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
     )
+
+
+class ManagedCluster(Base):
+    __tablename__ = "managed_clusters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    cluster_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    k8s_api_url: Mapped[str] = mapped_column(String(300))
+    prometheus_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    k8s_bearer_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )

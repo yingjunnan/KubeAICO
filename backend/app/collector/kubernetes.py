@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from app.core.config import Settings
+
+if TYPE_CHECKING:
+    from app.db.models import ManagedCluster
 
 
 class KubernetesCollector:
@@ -35,28 +38,36 @@ class KubernetesCollector:
             await self._client.aclose()
             self._client = None
 
-    async def list_nodes(self) -> list[dict[str, Any]]:
-        if self._use_mock:
+    async def list_nodes(self, cluster: ManagedCluster | None = None) -> list[dict[str, Any]]:
+        if self._should_use_mock(cluster):
             return self._mock_state["nodes"]
 
-        payload = await self._request("GET", "/api/v1/nodes")
+        payload = await self._request("GET", "/api/v1/nodes", cluster=cluster)
         return payload.get("items", [])
 
-    async def list_pods(self, namespace: str | None = None) -> list[dict[str, Any]]:
-        if self._use_mock:
+    async def list_pods(
+        self,
+        namespace: str | None = None,
+        cluster: ManagedCluster | None = None,
+    ) -> list[dict[str, Any]]:
+        if self._should_use_mock(cluster):
             pods: list[dict[str, Any]] = self._mock_state["pods"]
             if namespace:
                 return [pod for pod in pods if pod.get("metadata", {}).get("namespace") == namespace]
             return pods
 
         if namespace:
-            payload = await self._request("GET", f"/api/v1/namespaces/{namespace}/pods")
+            payload = await self._request("GET", f"/api/v1/namespaces/{namespace}/pods", cluster=cluster)
         else:
-            payload = await self._request("GET", "/api/v1/pods")
+            payload = await self._request("GET", "/api/v1/pods", cluster=cluster)
         return payload.get("items", [])
 
-    async def list_events(self, namespace: str | None = None) -> list[dict[str, Any]]:
-        if self._use_mock:
+    async def list_events(
+        self,
+        namespace: str | None = None,
+        cluster: ManagedCluster | None = None,
+    ) -> list[dict[str, Any]]:
+        if self._should_use_mock(cluster):
             events: list[dict[str, Any]] = self._mock_state["events"]
             if namespace:
                 return [
@@ -67,9 +78,9 @@ class KubernetesCollector:
             return events
 
         if namespace:
-            payload = await self._request("GET", f"/api/v1/namespaces/{namespace}/events")
+            payload = await self._request("GET", f"/api/v1/namespaces/{namespace}/events", cluster=cluster)
         else:
-            payload = await self._request("GET", "/api/v1/events")
+            payload = await self._request("GET", "/api/v1/events", cluster=cluster)
         return payload.get("items", [])
 
     async def list_resources(
@@ -77,11 +88,12 @@ class KubernetesCollector:
         kind: str,
         namespace: str | None = None,
         label_selector: str | None = None,
+        cluster: ManagedCluster | None = None,
     ) -> list[dict[str, Any]]:
         if kind not in self.kind_to_resource:
             raise ValueError(f"Unsupported kind: {kind}")
 
-        if self._use_mock:
+        if self._should_use_mock(cluster):
             items = self._mock_state.get(kind, [])
             if namespace:
                 items = [item for item in items if item.get("metadata", {}).get("namespace") == namespace]
@@ -97,14 +109,20 @@ class KubernetesCollector:
 
         path = self._list_path(kind=kind, namespace=namespace)
         params = {"labelSelector": label_selector} if label_selector else None
-        payload = await self._request("GET", path, params=params)
+        payload = await self._request("GET", path, params=params, cluster=cluster)
         return payload.get("items", [])
 
-    async def get_resource(self, kind: str, name: str, namespace: str) -> dict[str, Any]:
+    async def get_resource(
+        self,
+        kind: str,
+        name: str,
+        namespace: str,
+        cluster: ManagedCluster | None = None,
+    ) -> dict[str, Any]:
         if kind not in self.kind_to_resource:
             raise ValueError(f"Unsupported kind: {kind}")
 
-        if self._use_mock:
+        if self._should_use_mock(cluster):
             for item in self._mock_state.get(kind, []):
                 metadata = item.get("metadata", {})
                 if metadata.get("name") == name and metadata.get("namespace") == namespace:
@@ -112,10 +130,16 @@ class KubernetesCollector:
             raise ValueError("Resource not found")
 
         path = self._item_path(kind=kind, name=name, namespace=namespace)
-        return await self._request("GET", path)
+        return await self._request("GET", path, cluster=cluster)
 
-    async def get_related_events(self, kind: str, name: str, namespace: str) -> list[dict[str, Any]]:
-        events = await self.list_events(namespace=namespace)
+    async def get_related_events(
+        self,
+        kind: str,
+        name: str,
+        namespace: str,
+        cluster: ManagedCluster | None = None,
+    ) -> list[dict[str, Any]]:
+        events = await self.list_events(namespace=namespace, cluster=cluster)
         expected_kind = {
             "deployment": "Deployment",
             "statefulset": "StatefulSet",
@@ -150,12 +174,18 @@ class KubernetesCollector:
         name: str,
         namespace: str,
         tail_lines: int = 120,
+        cluster: ManagedCluster | None = None,
     ) -> list[str]:
         if kind == "pod":
-            return await self.get_pod_logs(namespace=namespace, pod_name=name, tail_lines=tail_lines)
+            return await self.get_pod_logs(
+                namespace=namespace,
+                pod_name=name,
+                tail_lines=tail_lines,
+                cluster=cluster,
+            )
 
-        if self._use_mock:
-            pods = await self.list_pods(namespace=namespace)
+        if self._should_use_mock(cluster):
+            pods = await self.list_pods(namespace=namespace, cluster=cluster)
             candidates = [
                 pod
                 for pod in pods
@@ -164,10 +194,15 @@ class KubernetesCollector:
             if not candidates:
                 return [f"No pod logs available for {kind}/{name} in namespace {namespace}."]
             pod_name = candidates[0].get("metadata", {}).get("name", "")
-            return await self.get_pod_logs(namespace=namespace, pod_name=pod_name, tail_lines=tail_lines)
+            return await self.get_pod_logs(
+                namespace=namespace,
+                pod_name=pod_name,
+                tail_lines=tail_lines,
+                cluster=cluster,
+            )
 
         try:
-            resource = await self.get_resource(kind=kind, name=name, namespace=namespace)
+            resource = await self.get_resource(kind=kind, name=name, namespace=namespace, cluster=cluster)
         except ValueError:
             return []
 
@@ -180,33 +215,51 @@ class KubernetesCollector:
             return []
 
         selector = self._build_label_selector(match_labels)
-        pods = await self.list_resources(kind="pod", namespace=namespace, label_selector=selector)
+        pods = await self.list_resources(
+            kind="pod",
+            namespace=namespace,
+            label_selector=selector,
+            cluster=cluster,
+        )
         if not pods:
             return []
 
         pod_name = pods[0].get("metadata", {}).get("name")
         if not pod_name:
             return []
-        return await self.get_pod_logs(namespace=namespace, pod_name=pod_name, tail_lines=tail_lines)
+        return await self.get_pod_logs(
+            namespace=namespace,
+            pod_name=pod_name,
+            tail_lines=tail_lines,
+            cluster=cluster,
+        )
 
-    async def get_pod_logs(self, namespace: str, pod_name: str, tail_lines: int = 120) -> list[str]:
-        if self._use_mock:
+    async def get_pod_logs(
+        self,
+        namespace: str,
+        pod_name: str,
+        tail_lines: int = 120,
+        cluster: ManagedCluster | None = None,
+    ) -> list[str]:
+        if self._should_use_mock(cluster):
             key = f"{namespace}/{pod_name}"
             lines = self._mock_state.get("pod_logs", {}).get(key)
             if lines:
                 return lines[:tail_lines]
             return [f"No mock logs found for pod {pod_name}."]
 
-        if not self.settings.k8s_api_url:
+        k8s_api_url = self._resolve_k8s_api_url(cluster)
+        if not k8s_api_url:
             raise ValueError("k8s_api_url is required for real cluster mode")
 
         headers = {"Accept": "text/plain"}
-        if self.settings.k8s_bearer_token:
-            headers["Authorization"] = f"Bearer {self.settings.k8s_bearer_token}"
+        k8s_bearer_token = self._resolve_k8s_bearer_token(cluster)
+        if k8s_bearer_token:
+            headers["Authorization"] = f"Bearer {k8s_bearer_token}"
 
         client = await self._get_client()
         response = await client.get(
-            f"{self.settings.k8s_api_url.rstrip('/')}/api/v1/namespaces/{namespace}/pods/{pod_name}/log",
+            f"{k8s_api_url.rstrip('/')}/api/v1/namespaces/{namespace}/pods/{pod_name}/log",
             params={"tailLines": tail_lines},
             headers=headers,
         )
@@ -219,11 +272,12 @@ class KubernetesCollector:
         name: str,
         namespace: str,
         replicas: int,
+        cluster: ManagedCluster | None = None,
     ) -> dict[str, Any]:
         if kind not in self.scalable_kinds:
             raise ValueError(f"Kind '{kind}' does not support scale")
 
-        if self._use_mock:
+        if self._should_use_mock(cluster):
             for item in self._mock_state[kind]:
                 md = item.get("metadata", {})
                 if md.get("name") == name and md.get("namespace") == namespace:
@@ -236,13 +290,25 @@ class KubernetesCollector:
         api_version, resource = self.kind_to_resource[kind]
         path = f"/apis/{api_version}/namespaces/{namespace}/{resource}/{name}/scale"
         body = {"spec": {"replicas": replicas}}
-        return await self._request("PATCH", path, json=body, content_type="application/merge-patch+json")
+        return await self._request(
+            "PATCH",
+            path,
+            json=body,
+            content_type="application/merge-patch+json",
+            cluster=cluster,
+        )
 
-    async def rollout_restart(self, kind: str, name: str, namespace: str) -> dict[str, Any]:
+    async def rollout_restart(
+        self,
+        kind: str,
+        name: str,
+        namespace: str,
+        cluster: ManagedCluster | None = None,
+    ) -> dict[str, Any]:
         if kind not in self.scalable_kinds:
             raise ValueError(f"Kind '{kind}' does not support rollout restart")
 
-        if self._use_mock:
+        if self._should_use_mock(cluster):
             now = datetime.now(UTC).isoformat()
             for item in self._mock_state[kind]:
                 md = item.get("metadata", {})
@@ -274,11 +340,21 @@ class KubernetesCollector:
             path,
             json=patch_payload,
             content_type="application/strategic-merge-patch+json",
+            cluster=cluster,
         )
 
-    @property
-    def _use_mock(self) -> bool:
-        return self.settings.use_mock_data or not self.settings.k8s_api_url
+    def _resolve_k8s_api_url(self, cluster: ManagedCluster | None) -> str | None:
+        if cluster and cluster.k8s_api_url:
+            return cluster.k8s_api_url
+        return self.settings.k8s_api_url
+
+    def _resolve_k8s_bearer_token(self, cluster: ManagedCluster | None) -> str | None:
+        if cluster and cluster.k8s_bearer_token:
+            return cluster.k8s_bearer_token
+        return self.settings.k8s_bearer_token
+
+    def _should_use_mock(self, cluster: ManagedCluster | None) -> bool:
+        return self.settings.use_mock_data or not self._resolve_k8s_api_url(cluster)
 
     def _list_path(self, kind: str, namespace: str | None) -> str:
         api_version, resource = self.kind_to_resource[kind]
@@ -306,21 +382,24 @@ class KubernetesCollector:
         params: dict[str, str] | None = None,
         json: dict[str, Any] | None = None,
         content_type: str = "application/json",
+        cluster: ManagedCluster | None = None,
     ) -> dict[str, Any]:
-        if not self.settings.k8s_api_url:
+        k8s_api_url = self._resolve_k8s_api_url(cluster)
+        if not k8s_api_url:
             raise ValueError("k8s_api_url is required for real cluster mode")
 
         headers = {
             "Accept": "application/json",
             "Content-Type": content_type,
         }
-        if self.settings.k8s_bearer_token:
-            headers["Authorization"] = f"Bearer {self.settings.k8s_bearer_token}"
+        k8s_bearer_token = self._resolve_k8s_bearer_token(cluster)
+        if k8s_bearer_token:
+            headers["Authorization"] = f"Bearer {k8s_bearer_token}"
 
         client = await self._get_client()
         response = await client.request(
             method,
-            f"{self.settings.k8s_api_url.rstrip('/')}{path}",
+            f"{k8s_api_url.rstrip('/')}{path}",
             params=params,
             json=json,
             headers=headers,

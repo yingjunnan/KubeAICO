@@ -10,14 +10,16 @@ from app.collector.kubernetes import KubernetesCollector
 from app.collector.prometheus import PrometheusCollector
 from app.core.config import get_settings
 from app.core.security import decode_token
-from app.db.models import User
+from app.db.models import ManagedCluster, User
 from app.db.session import get_db
 from app.repository.ai_task import AITaskRepository
 from app.repository.audit import AuditRepository
+from app.repository.cluster import ClusterRepository
 from app.repository.user import UserRepository
 from app.service.ai import AIService
 from app.service.alerts import AlertService
 from app.service.audit import AuditService
+from app.service.cluster import ClusterService
 from app.service.metrics import MetricsService
 from app.service.overview import OverviewService
 from app.service.resources import ResourceService
@@ -38,6 +40,11 @@ def get_audit_repository() -> AuditRepository:
 @lru_cache
 def get_ai_task_repository() -> AITaskRepository:
     return AITaskRepository()
+
+
+@lru_cache
+def get_cluster_repository() -> ClusterRepository:
+    return ClusterRepository()
 
 
 @lru_cache
@@ -76,6 +83,11 @@ def get_audit_service() -> AuditService:
 
 
 @lru_cache
+def get_cluster_service() -> ClusterService:
+    return ClusterService(get_cluster_repository())
+
+
+@lru_cache
 def get_ai_service() -> AIService:
     settings = get_settings()
     return AIService(
@@ -107,3 +119,22 @@ async def get_current_user(
         raise credentials_exception
 
     return user
+
+
+async def resolve_cluster_by_id(
+    *,
+    db: AsyncSession,
+    cluster_id: str | None,
+    allow_inactive: bool = False,
+    cluster_repo: ClusterRepository | None = None,
+) -> ManagedCluster | None:
+    if not cluster_id:
+        return None
+
+    repo = cluster_repo or get_cluster_repository()
+    cluster = await repo.get_by_cluster_key(db, cluster_id)
+    if not cluster:
+        raise ValueError(f"Cluster '{cluster_id}' not found")
+    if not allow_inactive and not cluster.is_active:
+        raise ValueError(f"Cluster '{cluster_id}' is disabled")
+    return cluster

@@ -83,7 +83,7 @@ async function nextPage() {
   await loadLogs()
 }
 
-function onFilters(payload: { range: number; namespace?: string; env: string }) {
+function onFilters(payload: { range: number; namespace?: string; cluster_id?: string; env?: string }) {
   namespace.value = payload.namespace || ''
   offset.value = 0
   void loadLogs()

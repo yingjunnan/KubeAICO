@@ -1,5 +1,12 @@
 <template>
-  <AppShell title="Cluster Overview" :range="filters.range" :namespace="filters.namespace" @filters-change="updateFilters">
+  <AppShell
+    title="Cluster Overview"
+    :range="filters.range"
+    :namespace="filters.namespace"
+    :cluster-id="filters.cluster_id"
+    :env="filters.env"
+    @filters-change="updateFilters"
+  >
     <section class="hero card">
       <div class="hero-copy">
         <p class="eyebrow">AI Predictive Operations</p>
@@ -57,7 +64,8 @@ const memValues = ref<number[]>([])
 const filters = reactive({
   range: 60,
   namespace: '',
-  env: 'prod',
+  cluster_id: '',
+  env: '',
 })
 
 let ws: WebSocket | null = null
@@ -91,9 +99,19 @@ function toAxis(ts: number): string {
 
 async function loadSummaryAndCharts() {
   const [summaryRes, cpu, mem] = await Promise.all([
-    getOverviewSummary(),
-    getTimeseries({ metric: 'cpu_usage', range_minutes: filters.range, namespace: filters.namespace || undefined }),
-    getTimeseries({ metric: 'memory_usage', range_minutes: filters.range, namespace: filters.namespace || undefined }),
+    getOverviewSummary({ cluster_id: filters.cluster_id || undefined }),
+    getTimeseries({
+      metric: 'cpu_usage',
+      range_minutes: filters.range,
+      namespace: filters.namespace || undefined,
+      cluster_id: filters.cluster_id || undefined,
+    }),
+    getTimeseries({
+      metric: 'memory_usage',
+      range_minutes: filters.range,
+      namespace: filters.namespace || undefined,
+      cluster_id: filters.cluster_id || undefined,
+    }),
   ])
 
   summary.value = summaryRes
@@ -111,7 +129,7 @@ function connectWs() {
   const token = localStorage.getItem('kubeaico_token')
   if (!token) return
 
-  ws = new WebSocket(getWsOverviewUrl(token))
+  ws = new WebSocket(getWsOverviewUrl(token, filters.cluster_id || undefined))
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data) as ClusterSummary
     summary.value = data
@@ -123,11 +141,17 @@ function connectWs() {
   }
 }
 
-async function updateFilters(next: { range: number; namespace?: string; env: string }) {
+async function updateFilters(next: { range: number; namespace?: string; cluster_id?: string; env?: string }) {
+  const changedCluster = filters.cluster_id !== (next.cluster_id ?? '')
   filters.range = next.range
   filters.namespace = next.namespace ?? ''
-  filters.env = next.env
+  filters.cluster_id = next.cluster_id ?? ''
+  filters.env = next.env ?? ''
   await loadSummaryAndCharts()
+  if (changedCluster) {
+    ws?.close()
+    connectWs()
+  }
 }
 
 onMounted(async () => {
